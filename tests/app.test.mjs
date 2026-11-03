@@ -171,6 +171,46 @@ await test("recordings are stored as real audio", async () => {
   assert(d > 0.3, "duration " + d);
 });
 
+await test("settings: WAV 24-bit records a real 24-bit WAV and emails it as WAV", async () => {
+  await page.evaluate(() => {
+    navigator.canShare = d => !!(d && d.files);
+    navigator.share = async d => { const f = d.files[0]; window.__shared = { n: d.files.length, name: f.name, type: f.type, size: f.size }; };
+  });
+  await page.click("#setBtn");
+  await page.waitForSelector("#setDlg[open]");
+  assert(await page.locator("#fmtList .opt").count() === 3, "three formats");
+  assert(await page.locator("#inSel option").count() >= 2, "Automatic plus the fake mic");
+  await page.click("#fmtList .opt >> text=WAV · 24-bit");
+  await page.click("#setDone");
+  assert((await page.textContent("#src")).startsWith("WAV · 24-bit"), "source line " + await page.textContent("#src"));
+  await record(2000);
+  const h = await page.evaluate(async () => {
+    const t = takes[0], b = new DataView(await t.blob.slice(0, 44).arrayBuffer());
+    const tag = String.fromCharCode(...new Uint8Array(await t.blob.slice(0, 4).arrayBuffer()));
+    return { tag, type: t.type, ch: b.getUint16(22, true), sr: b.getUint32(24, true), bits: b.getUint16(34, true), data: b.getUint32(40, true), size: t.blob.size, dur: t.dur };
+  });
+  assert(h.tag === "RIFF" && h.type === "audio/wav" && h.bits === 24, "header " + JSON.stringify(h));
+  assert(h.data === h.size - 44, "data length matches " + JSON.stringify(h));
+  assert(h.data / (h.ch * 3 * h.sr) > 1.5, "about 2 seconds of audio " + JSON.stringify(h));
+  console.log("       " + JSON.stringify(h));
+  await page.evaluate(() => { window.__shared = null; });
+  await page.click("#fMail");
+  await page.waitForFunction(() => window.__shared);
+  const s = await page.evaluate(() => window.__shared);
+  assert(s.type === "audio/wav" && /\.wav$/.test(s.name), "shared " + JSON.stringify(s));
+});
+
+await test("settings are kept", async () => {
+  await page.reload();
+  assert((await page.textContent("#src")).startsWith("WAV · 24-bit"), "kept");
+  await page.click("#setBtn");
+  await page.click("#fmtList .opt >> text=WAV · 16-bit");
+  await page.click("#setDone");
+  await record(1200);
+  const bits = await page.evaluate(async () => new DataView(await takes[0].blob.slice(0, 44).arrayBuffer()).getUint16(34, true));
+  assert(bits === 16, "16-bit " + bits);
+});
+
 await test("no page errors", async () => { assert(!errors.length, errors.join("; ")); });
 
 await page.screenshot({ path: process.env.SHOT || path.join(ROOT, "tests", "shot.png"), fullPage: false });

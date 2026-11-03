@@ -147,6 +147,28 @@ dialog .btns{justify-content:flex-end}
   font-size:17px;font-weight:700;white-space:nowrap;padding:16px 22px;background:var(--orange);color:var(--mx);border:2px solid var(--mx);box-shadow:6px 6px 0 var(--mx)}
 .fine{font-size:15px;color:var(--mx2);margin:22px 2px 0}
 .sending{opacity:.6;pointer-events:none}
+/* Header + settings */
+/* Title centred on the page; the gear sits in the right-hand column, an empty one balances it on the left */
+header.top{display:grid;grid-template-columns:48px 1fr 48px;align-items:center;gap:8px;margin:6px 0 16px}
+header.top h1.brand{margin:0;grid-column:2;justify-content:center;text-align:center;white-space:nowrap;font-size:clamp(17px,5.4vw,24px);letter-spacing:.05em;gap:10px}
+header.top h1.brand::before{width:14px;height:14px}
+header.top .setbtn{grid-column:3}
+.setbtn{display:grid;place-items:center;width:48px;height:48px;border:2px solid var(--mx);background:var(--mxpanel);padding:0}
+.setbtn svg{width:24px;height:24px}
+.setbtn:active{background:var(--mx);color:var(--mxon)}
+.src{border:1px solid var(--mxdim);background:transparent;color:var(--mx2);font-size:14px;padding:6px 10px;text-align:center;max-width:100%;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recording .src{pointer-events:none}
+dialog .sec{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mx2);margin:4px 0 8px}
+dialog .sec ~ .sec{margin-top:20px}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{display:flex;gap:12px;align-items:flex-start;border:2px solid var(--mx);background:var(--mxbg);padding:12px;cursor:pointer}
+.opt input{width:24px;height:24px;margin:2px 0 0;accent-color:var(--mx);flex:none}
+.opt b{display:block;font-size:18px}
+.opt span{display:block;font-size:15px;color:var(--mx2);margin-top:2px}
+.opt:has(input:checked){background:var(--mxpanel);box-shadow:inset 6px 0 0 var(--orange)}
+dialog select{width:100%;min-height:56px;border:2px solid var(--mx);background:var(--mxbg);font:inherit;font-size:18px;padding:0 10px;color:var(--mx)}
+.hint{font-size:15px;color:var(--mx2);margin:8px 0 18px!important}
 /* Waveforms: ink bars, the played part in orange */
 .wave{display:block;width:100%;height:110px;border:2px solid var(--mx);background:var(--mxbg);margin:0 0 12px;touch-action:none;cursor:pointer}
 .meta{flex:1}
@@ -155,7 +177,7 @@ dialog .btns{justify-content:flex-end}
 </head>
 <body>
 <main class="wrap">
-  <h1 class="brand">Simple recorder</h1>
+  <header class="top"><h1 class="brand">Simple recorder</h1><button class="setbtn" id="setBtn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button></header>
 
   <!-- Install: shown in the browser until the app is on the home screen -->
   <section class="box inst" id="inst" hidden>
@@ -183,6 +205,7 @@ dialog .btns{justify-content:flex-end}
     <div class="clock" id="clock">0:00</div>
     <div class="meter" aria-hidden="true"><i id="lvl"></i></div>
     <div class="say" id="say">Press REC to start recording</div>
+    <button class="src" id="src" type="button" aria-label="Recording format and input. Tap to change."></button>
   </section>
 
   <!-- The take just recorded -->
@@ -235,6 +258,18 @@ dialog .btns{justify-content:flex-end}
     <p id="askMsg"></p>
     <input type="text" id="askInput" hidden autocomplete="off">
     <div class="btns"><button class="ghost" id="askNo" type="button">Cancel</button><button class="primary" id="askYes" type="button">OK</button></div>
+  </div>
+</dialog>
+
+<dialog id="setDlg" aria-labelledby="setTitle">
+  <h3 id="setTitle">Settings</h3>
+  <div class="body">
+    <div class="sec">Recording format</div>
+    <div id="fmtList" class="opts"></div>
+    <div class="sec">Input</div>
+    <select id="inSel" aria-label="Input"></select>
+    <p class="hint" id="inHint"></p>
+    <div class="btns"><button class="primary" id="setDone" type="button">Done</button></div>
   </div>
 </dialog>
 
@@ -324,41 +359,133 @@ async function load() {
 }
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
 
+/* ---------- settings ----------
+   Format: M4A (AAC 256 kbps, small, the default), WAV 24-bit or WAV 16-bit (lossless, for mixing and mastering).
+   Input: "auto" uses a USB mic whenever one is plugged in, otherwise the phone's own mic; or one picked mic. */
+const SET_KEY = "simple-recorder-settings";
+const FORMATS = {
+  m4a: { label: "M4A · AAC 256 kbps", note: "Small files. A whole song emails easily." },
+  wav24: { label: "WAV · 24-bit", note: "Lossless, best for mixing and mastering. About 9 MB a minute." },
+  wav16: { label: "WAV · 16-bit", note: "Lossless, CD quality. About 6 MB a minute." }
+};
+let settings = { format: "m4a", input: "auto" };
+try { Object.assign(settings, JSON.parse(localStorage.getItem(SET_KEY) || "{}")); } catch (e) {}
+if (!FORMATS[settings.format]) settings.format = "m4a";
+const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {} };
+
 /* ---------- recording ----------
    Phone mics normally clean up speech (echo cancelling, noise removal, automatic volume). That ruins guitar,
-   so it's all turned off. Recordings are saved as .m4a where the phone can, since that plays everywhere. */
+   so it's all turned off. M4A goes through the phone's own encoder (MediaRecorder); WAV is taken sample by
+   sample from the mic (an AudioWorklet) at the phone's own rate, usually 48 kHz, with nothing lost. */
 const TYPES = ["audio/mp4;codecs=mp4a.40.2", "audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"];
 const pickType = () => (window.MediaRecorder && MediaRecorder.isTypeSupported) ? (TYPES.find(t => MediaRecorder.isTypeSupported(t)) || "") : "";
-const extOf = type => /mp4/.test(type) ? "m4a" : /ogg/.test(type) ? "ogg" : "webm";
+const extOf = type => /wav/.test(type) ? "wav" : /mp4/.test(type) ? "m4a" : /ogg/.test(type) ? "ogg" : "webm";
+const USB_RE = /usb|external|interface|audio device|rode|shure|blue|yeti|zoom|tascam|focusrite|scarlett|irig/i;
 
-let rec = null, stream = null, chunks = [], t0 = 0, tick = null, actx = null, raf = 0, wake = null, busy = false;
+let rec = null, stream = null, chunks = [], t0 = 0, tick = null, actx = null, raf = 0, wake = null, busy = false, inputName = "";
+
+async function inputs() {
+  try { return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput"); } catch (e) { return []; }
+}
+// Which mic to ask for: the picked one, or in Automatic a USB mic if one is plugged in
+async function chosenInput() {
+  const L = await inputs();
+  if (settings.input !== "auto") return L.find(d => d.deviceId === settings.input) ? settings.input : "";
+  const usb = L.find(d => d.label && USB_RE.test(d.label) && d.deviceId !== "default" && d.deviceId !== "communications");
+  return usb ? usb.deviceId : "";
+}
+async function openMic() {
+  const base = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 } };
+  const id = await chosenInput();
+  if (id) { try { return await navigator.mediaDevices.getUserMedia({ audio: { ...base, deviceId: { exact: id } } }); } catch (e) {} }
+  return await navigator.mediaDevices.getUserMedia({ audio: base });   // unplugged or not found: the phone's own mic
+}
+
+// WAV capture: a worklet hands over the raw samples in blocks; they're turned into 16- or 24-bit PCM as they come
+const WAV_WORKLET = `class Cap extends AudioWorkletProcessor{
+  constructor(){super();this.b=[];this.n=0;this.port.onmessage=()=>{this.port.postMessage({blocks:this.b,done:true});this.b=[];this.n=0}}
+  process(ins){const i=ins[0];if(i&&i.length&&i[0].length){this.b.push(i.map(c=>c.slice(0)));this.n+=i[0].length;
+    if(this.n>=12000){this.port.postMessage({blocks:this.b});this.b=[];this.n=0}}return true}}
+registerProcessor("cap",Cap);`;
+async function wavRecorder(ctx, src, bits) {
+  const url = URL.createObjectURL(new Blob([WAV_WORKLET], { type: "text/javascript" }));
+  await ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+  const node = new AudioWorkletNode(ctx, "cap", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+  const mute = ctx.createGain(); mute.gain.value = 0;
+  src.connect(node); node.connect(mute); mute.connect(ctx.destination);   // pulled by the graph, heard by nobody
+  const B = bits / 8, parts = []; let ch = 0, frames = 0, finish = null;
+  const take = blocks => {
+    for (const blk of blocks) {
+      if (!ch) ch = Math.min(2, blk.length);
+      const n = blk[0].length, out = new Uint8Array(n * ch * B); let o = 0;
+      for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) {
+        const x = Math.max(-1, Math.min(1, (blk[c] || blk[0])[i]));
+        if (B === 2) { const v = Math.round(x < 0 ? x * 32768 : x * 32767); out[o++] = v & 255; out[o++] = (v >> 8) & 255; }
+        else { const v = Math.round(x < 0 ? x * 8388608 : x * 8388607); out[o++] = v & 255; out[o++] = (v >> 8) & 255; out[o++] = (v >> 16) & 255; }
+      }
+      parts.push(out); frames += n;
+    }
+  };
+  node.port.onmessage = e => { take(e.data.blocks); if (e.data.done && finish) finish(); };
+  const r = {
+    state: "recording", mimeType: "audio/wav", onstop: null,
+    stop() {
+      if (r.state !== "recording") return; r.state = "stopping";
+      finish = () => {
+        try { src.disconnect(); node.disconnect(); mute.disconnect(); } catch (e) {}
+        ch = ch || 1;
+        const sr = ctx.sampleRate, bytes = frames * ch * B, h = new DataView(new ArrayBuffer(44));
+        const S = (o, t) => { for (let i = 0; i < t.length; i++) h.setUint8(o + i, t.charCodeAt(i)); };
+        S(0, "RIFF"); h.setUint32(4, 36 + bytes, true); S(8, "WAVE"); S(12, "fmt "); h.setUint32(16, 16, true);
+        h.setUint16(20, 1, true); h.setUint16(22, ch, true); h.setUint32(24, sr, true); h.setUint32(28, sr * ch * B, true);
+        h.setUint16(32, ch * B, true); h.setUint16(34, bits, true); S(36, "data"); h.setUint32(40, bytes, true);
+        chunks = [h.buffer, ...parts]; r.state = "inactive"; r.onstop && r.onstop();
+      };
+      node.port.postMessage("flush");
+    }
+  };
+  return r;
+}
 
 async function startRec() {
   if (busy) return; busy = true;
   stopPlay();
   // Made during the tap itself: phones keep audio made later, after the mic question, switched off
-  try { actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) { actx = null; }
+  try { actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "playback" }); actx.resume(); } catch (e) { actx = null; }
+  const wav = settings.format !== "m4a";
   try {
-    if (!navigator.mediaDevices || !window.MediaRecorder) throw new Error("nosupport");
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    if (!navigator.mediaDevices || (!wav && !window.MediaRecorder) || (wav && !(actx && actx.audioWorklet))) throw new Error("nosupport");
+    stream = await openMic();
   } catch (e) {
     busy = false;
     try { actx && actx.close(); } catch (err) {} actx = null;
     if (e.message === "nosupport") return tell("This browser can't record. Open the app in Chrome (Android) or Safari (iPhone).");
     return tell("The app needs the microphone to record.\n\nWhen your phone asks, tap Allow. If you said no before, open the browser's site settings for this page and allow the microphone.", "Microphone");
   }
-  const type = pickType();
-  try { rec = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 192000 } : {}); }
-  catch (e) { rec = new MediaRecorder(stream); }
+  const tr = stream.getAudioTracks()[0];
+  inputName = (tr && tr.label) || "";
   chunks = [];
-  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  try {
+    if (wav) {
+      rec = await wavRecorder(actx, actx.createMediaStreamSource(stream), settings.format === "wav16" ? 16 : 24);
+    } else {
+      const type = pickType();
+      try { rec = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 256000 } : {}); }
+      catch (e) { rec = new MediaRecorder(stream); }
+      rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.start(1000);
+    }
+  } catch (e) {
+    busy = false; stream.getTracks().forEach(t => t.stop()); stream = null; try { actx && actx.close(); } catch (err) {} actx = null;
+    return tell("Recording couldn't start in this format. Try M4A in Settings.");
+  }
   rec.onstop = saveRec;
-  rec.start(1000);
   t0 = Date.now();
   document.body.classList.add("recording");
   $("recBtn").setAttribute("aria-label", "Stop recording"); $("recWord").textContent = "STOP";
   $("say").innerHTML = '<span class="dot"></span>Recording… press STOP when you’re done';
   $("fresh").hidden = true;
+  showSource();
   tick = setInterval(() => $("clock").textContent = fmt((Date.now() - t0) / 1000), 250);
   meter();
   try { wake = await navigator.wakeLock.request("screen"); } catch (e) { wake = null; }   // keep the screen on while recording
@@ -396,7 +523,7 @@ async function saveRec() {
   $("lvl").style.width = "0";
   $("clock").textContent = "0:00";
   $("say").textContent = "Press REC to start recording";
-  const blob = new Blob(chunks, { type: type.split(";")[0] }); chunks = [];
+  const blob = new Blob(chunks, { type: type.split(";")[0] }); chunks = []; showSource();
   if (!blob.size) return tell("Nothing was recorded. Try again.");
   const now = Date.now();
   const t = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), created: now, name: when(now), dur, type: blob.type, blob, deleted: 0 };
@@ -465,7 +592,7 @@ function shareName(t) {
 }
 function shareFile(t) {
   const ty = t.type || "";
-  const [ext, mime] = /mp4|m4a|aac/.test(ty) ? ["m4a", "audio/x-m4a"] : /webm/.test(ty) ? ["weba", "audio/webm"] : /ogg/.test(ty) ? ["ogg", "audio/ogg"] : ["m4a", "audio/x-m4a"];
+  const [ext, mime] = /wav/.test(ty) ? ["wav", "audio/wav"] : /mp4|m4a|aac/.test(ty) ? ["m4a", "audio/x-m4a"] : /webm/.test(ty) ? ["weba", "audio/webm"] : /ogg/.test(ty) ? ["ogg", "audio/ogg"] : ["m4a", "audio/x-m4a"];
   return new File([t.blob], shareName(t) + "." + ext, { type: mime });
 }
 async function wavFile(t) { return new File([wavOf(await decode(t.blob))], shareName(t) + ".wav", { type: "audio/wav" }); }
@@ -474,7 +601,13 @@ async function emailTake(t) {
   if (!navigator.share) return downloadMail(t, shareFile(t));
   let wavFirst = false; try { wavFirst = !!localStorage.getItem(WAV_KEY); } catch (e) {}
   let file;
-  try { file = wavFirst ? await wavFile(t) : shareFile(t); } catch (e) { file = shareFile(t); }
+  try { file = wavFirst && !/wav/.test(t.type) ? await wavFile(t) : shareFile(t); } catch (e) { file = shareFile(t); }
+  // Gmail attaches up to 25 MB; bigger files go through Drive from the same share menu
+  if (file.size > 25e6) {
+    const mb = Math.round(file.size / 1e6);
+    const go = await ask("This recording is " + mb + " MB. That's too big to attach to an email (Gmail takes up to 25 MB).\n\nIn the share menu, choose Drive to save it there, then share it from Drive. Or choose M4A in Settings for smaller files.", { ok: "Open share menu", title: "Big recording" });
+    if (!go) return;
+  }
   try { await navigator.share(shareData(t, file)); return; }
   catch (e) {
     if (e.name === "AbortError") return;   // he closed the share menu himself
@@ -578,6 +711,47 @@ function paint() {
   });
   if (freshId) $("fPlay").lastChild.textContent = (cur && cur.id === freshId && on) ? "Pause" : "Listen";
 }
+
+/* ---------- settings screen ---------- */
+const micName = (d, i) => d.label || ("Microphone " + (i + 1));
+async function showSource() {
+  if (rec && rec.state === "recording") {
+    const fmtTxt = { m4a: "M4A 256k", wav24: "WAV 24-bit", wav16: "WAV 16-bit" }[settings.format];
+    const sr = settings.format !== "m4a" && actx ? Math.round(actx.sampleRate / 100) / 10 + " kHz" : "";
+    $("src").textContent = [fmtTxt, sr, inputName || "Phone mic"].filter(Boolean).join(" · ");
+    return;
+  }
+  let inp = "Automatic";
+  if (settings.input !== "auto") { const L = await inputs(), i = L.findIndex(d => d.deviceId === settings.input); inp = i >= 0 ? micName(L[i], i) : "Automatic"; }
+  else { const L = await inputs(), u = L.find(d => d.label && USB_RE.test(d.label) && d.deviceId !== "default" && d.deviceId !== "communications"); if (u) inp = u.label; }
+  $("src").textContent = FORMATS[settings.format].label + " · " + inp;
+}
+async function fillSettings() {
+  const fl = $("fmtList"); fl.textContent = "";
+  for (const [k, f] of Object.entries(FORMATS)) {
+    const l = document.createElement("label"); l.className = "opt";
+    l.innerHTML = '<input type="radio" name="fmt"><div><b></b><span></span></div>';
+    l.querySelector("b").textContent = f.label; l.querySelector("span").textContent = f.note;
+    const r = l.querySelector("input"); r.value = k; r.checked = settings.format === k;
+    r.onchange = () => { settings.format = k; saveSettings(); showSource(); };
+    fl.append(l);
+  }
+  const L = await inputs(), sel = $("inSel"); sel.textContent = "";
+  const add = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; sel.append(o); };
+  add("auto", "Automatic (USB mic when plugged in)");
+  L.filter(d => d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications").forEach((d, i) => add(d.deviceId, micName(d, i)));
+  if (settings.input !== "auto" && ![...sel.options].some(o => o.value === settings.input)) add(settings.input, "Picked mic (not plugged in)");
+  sel.value = settings.input;
+  const named = L.some(d => d.label);
+  $("inHint").textContent = named
+    ? "Plug a USB mic into the phone and Automatic uses it. Unplug it and the phone's own mic is used."
+    : "Press REC once and allow the microphone, then the mic names show here.";
+}
+$("inSel").onchange = () => { settings.input = $("inSel").value; saveSettings(); showSource(); };
+$("setBtn").onclick = $("src").onclick = async () => { if (rec && rec.state === "recording") return; await fillSettings(); $("setDlg").showModal(); };
+$("setDone").onclick = () => $("setDlg").close();
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener)
+  navigator.mediaDevices.addEventListener("devicechange", () => { showSource(); if ($("setDlg").open) fillSettings(); });
 
 /* ---------- waveforms ---------- */
 const INK = "#141414", ORANGE = "#ff4d00", DIM = "#bdbcb6";
@@ -723,6 +897,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) chec
 setTimeout(checkUpdate, 3000);
 
 installUI();
+showSource();
 /* Welcome: shown once, the first time the app is opened */
 {
   const WKEY = "simple-recorder-welcomed", w = $("welcome");
