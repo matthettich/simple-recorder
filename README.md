@@ -10,7 +10,7 @@ Open it at **https://matthettich.github.io/simple-recorder/**
 - **Email:** tap *Email to myself*, then pick Gmail (or Mail). A new email opens with the recording attached.
 - **Delete:** tap the bin. Tap **Undo** at the bottom if it was a mistake. Deleted takes also sit under
   *Recently deleted* for 30 days, where they can be restored.
-- **Listen:** tap any recording. When it finishes, the next one plays.
+- **Listen:** tap any recording; it plays just that one. Settings → *Play the next recording* carries on down the list.
 - **Rename:** tap **Name**.
 
 Recordings stay on the phone (in the browser's storage). Emailing a take is the way to keep a copy somewhere else.

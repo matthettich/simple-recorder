@@ -211,6 +211,23 @@ await test("settings are kept", async () => {
   assert(bits === 16, "16-bit " + bits);
 });
 
+await test("plays only the pressed recording unless Play the next is on", async () => {
+  const ended = async () => page.evaluate(() => { const a = document.getElementById("audio"); a.dispatchEvent(new Event("ended")); return cur && cur.id; });
+  const first = await page.evaluate(() => live()[0].id);
+  await page.click("#rows .row >> nth=0 >> .play");
+  await page.waitForFunction(() => !document.getElementById("audio").paused);
+  let id = await ended();
+  assert(id === first, "stayed on the same take");
+  await page.click("#setBtn");
+  assert(!(await page.isChecked("#autoNext")), "off by default");
+  await page.check("#autoNext");
+  await page.click("#setDone");
+  id = await ended();
+  const second = await page.evaluate(() => live()[1].id);
+  assert(id === second, "moved to the next take");
+  await page.evaluate(() => { const s = JSON.parse(localStorage.getItem("simple-recorder-settings")); if (!s.autoplay) throw 0; });
+});
+
 await test("no page errors", async () => { assert(!errors.length, errors.join("; ")); });
 
 await page.screenshot({ path: process.env.SHOT || path.join(ROOT, "tests", "shot.png"), fullPage: false });

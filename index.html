@@ -270,6 +270,8 @@ dialog select{width:100%;min-height:56px;border:2px solid var(--mx);background:v
   <div class="body">
     <div class="sec">Recording format</div>
     <div id="fmtList" class="opts"></div>
+    <div class="sec">Playback</div>
+    <label class="opt"><input type="checkbox" id="autoNext"><div><b>Play the next recording</b><span>When a recording ends, carry on down the list. Off: it plays just the one you pressed.</span></div></label>
     <div class="sec">Input</div>
     <select id="inSel" aria-label="Input"></select>
     <p class="hint" id="inHint"></p>
@@ -372,7 +374,7 @@ const FORMATS = {
   wav24: { label: "WAV · 24-bit", note: "Lossless, best for mixing and mastering. About 9 MB a minute." },
   wav16: { label: "WAV · 16-bit", note: "Lossless, CD quality. About 6 MB a minute." }
 };
-let settings = { format: "m4a", input: "auto" };
+let settings = { format: "m4a", input: "auto", autoplay: false };
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SET_KEY) || "{}")); } catch (e) {}
 if (!FORMATS[settings.format]) settings.format = "m4a";
 const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {} };
@@ -662,7 +664,8 @@ async function renameTake(t) {
   t.name = n.slice(0, 80); await putTake(t); render();
 }
 
-/* ---------- player: the list is a playlist, newest first; when one ends the next plays ---------- */
+/* ---------- player: plays the one pressed and stops at its end; with "Play the next recording" on (Settings),
+   it carries on down the list, newest first. ◀◀ / ▶▶ always move through the list. */
 const audio = $("audio");
 let cur = null, url = null, freshId = null, binOpen = false;
 function playTake(t) {
@@ -689,7 +692,10 @@ function step(n) {
 $("pPlay").onclick = () => cur && (audio.paused ? audio.play() : audio.pause());
 $("pPrev").onclick = () => { if (audio.currentTime > 3) audio.currentTime = 0; else step(-1); };
 $("pNext").onclick = () => step(1);
-audio.onended = () => step(1);
+audio.onended = () => {
+  if (settings.autoplay) return step(1);
+  audio.currentTime = 0; paint(); drawAll();   // back to the start, ready to play again
+};
 audio.onplay = () => { paint(); startWaveLoop(); };
 audio.onpause = () => { paint(); drawAll(); };
 let seeking = false;
@@ -731,6 +737,7 @@ async function showSource() {
   $("src").textContent = FORMATS[settings.format].label + " · " + inp;
 }
 async function fillSettings() {
+  $("autoNext").checked = !!settings.autoplay;
   const fl = $("fmtList"); fl.textContent = "";
   for (const [k, f] of Object.entries(FORMATS)) {
     const l = document.createElement("label"); l.className = "opt";
@@ -751,6 +758,7 @@ async function fillSettings() {
     ? "Plug a USB mic into the phone and Automatic uses it. Unplug it and the phone's own mic is used."
     : "Press REC once and allow the microphone, then the mic names show here.";
 }
+$("autoNext").onchange = () => { settings.autoplay = $("autoNext").checked; saveSettings(); };
 $("inSel").onchange = () => { settings.input = $("inSel").value; saveSettings(); showSource(); };
 $("setBtn").onclick = $("src").onclick = async () => { if (rec && rec.state === "recording") return; await fillSettings(); $("setDlg").showModal(); };
 $("setDone").onclick = () => $("setDlg").close();
