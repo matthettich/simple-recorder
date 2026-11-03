@@ -559,24 +559,29 @@ $("fDel").onclick = () => { const t = takes.find(t => t.id === freshId); t && de
 /* ---------- install ----------
    Android Chrome offers its own install prompt, which a web page may only open from a tap, so a card with an
    Install button shows until the app is installed. iPhones have no prompt: the card says how to add it instead.
-   "Not now" hides the card for a week. */
-const INST_KEY = "simple-recorder-inst-later";
+   "Not now" hides the card for a week.
+   Once installed the card never shows again, in the app or in the browser: Chrome only offers its prompt when the
+   app isn't installed, and the app notes that it's installed (the browser and the app share this storage). */
+const INST_KEY = "simple-recorder-inst-later", HAVE_KEY = "simple-recorder-installed";
 let installEvt = null;
 const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const isPhone = isIos || /android/i.test(navigator.userAgent);
+const markInstalled = () => { try { localStorage.setItem(HAVE_KEY, "1"); } catch (e) {} };
+const isInstalled = () => { try { return !!localStorage.getItem(HAVE_KEY); } catch (e) { return false; } };
+if (standalone()) markInstalled();
 function installUI() {
   let later = 0; try { later = +localStorage.getItem(INST_KEY) || 0; } catch (e) {}
-  const show = !standalone() && Date.now() - later > 7 * 864e5 && (installEvt || isPhone);
+  // Android: only when Chrome offers to install (it doesn't once installed). iPhone: until it's opened from the home screen.
+  const show = !standalone() && Date.now() - later > 7 * 864e5 && (installEvt || (isIos && !isInstalled()));
   $("inst").hidden = !show;
   $("instAndroid").hidden = !installEvt;
   $("instIos").hidden = !!installEvt || !isIos;
-  $("instOther").hidden = !!installEvt || isIos;
+  $("instOther").hidden = true;
 }
 function later() { try { localStorage.setItem(INST_KEY, String(Date.now())); } catch (e) {} installUI(); }
 $("instLater").onclick = $("instLater2").onclick = $("instLater3").onclick = later;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; installUI(); });
-window.addEventListener("appinstalled", () => { installEvt = null; installUI(); tell("Installed. You'll find Recorder on your home screen."); });
+window.addEventListener("appinstalled", () => { installEvt = null; markInstalled(); installUI(); tell("Installed. You'll find Recorder on your home screen."); });
 $("instBtn").onclick = async () => {
   if (!installEvt) return;
   const e = installEvt; installEvt = null; e.prompt();
