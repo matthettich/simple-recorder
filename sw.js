@@ -1,6 +1,6 @@
 // Bump this version whenever you change index.html so phones pick up the update.
-const CACHE = "simple-recorder-v4";
-const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png"];
+const CACHE = "simple-recorder-v5";
+const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "fonts/JetBrainsMono-400.woff2", "fonts/JetBrainsMono-700.woff2"];
 
 self.addEventListener("install", e => {
   // Cache files one by one so a single missing file can't stop the app installing.

@@ -58,9 +58,14 @@ await test("welcome shows once", async () => {
   await page.reload();
   assert(!(await page.isVisible("#welcome")), "not shown again");
   await page.evaluate(() => {
-    window.__shared = null;
+    window.__shared = null; window.__refuse = false;
+    const OK = ["audio/x-m4a", "audio/webm", "audio/wav", "audio/ogg", "audio/mp3", "audio/mpeg", "audio/flac"];
     navigator.canShare = d => !!(d && d.files);
-    navigator.share = async d => { window.__shared = { n: d.files.length, name: d.files[0].name, type: d.files[0].type, size: d.files[0].size, title: d.title }; };
+    navigator.share = async d => {
+      const f = d.files[0];
+      if (!OK.includes(f.type) || (window.__refuse && !/wav/.test(f.type))) throw new DOMException("Permission denied", "NotAllowedError");
+      window.__shared = { n: d.files.length, name: f.name, type: f.type, size: f.size, title: d.title };
+    };
   });
 });
 
@@ -98,10 +103,35 @@ await test("newest take is first and plays", async () => {
 
 await test("email hands the file to the share sheet", async () => {
   await page.click("#fMail");
+  await page.waitForFunction(() => window.__shared);
   const s = await page.evaluate(() => window.__shared);
   assert(s && s.n === 1 && s.size > 1000, "shared " + JSON.stringify(s));
-  assert(/\.(m4a|webm|ogg)$/.test(s.name), "file name " + s.name);
+  assert(/\.(m4a|weba|ogg)$/.test(s.name), "file name " + s.name);
   console.log("       shared " + s.name + " (" + s.type + ", " + s.size + " bytes)");
+});
+
+await test("a phone that refuses the file gets a WAV after one more tap", async () => {
+  await page.evaluate(() => { window.__shared = null; window.__refuse = true; });
+  await page.click("#fMail");
+  await page.waitForSelector("#askDlg[open]");
+  assert((await page.textContent("#askMsg")).includes("ready to email"), "ready message");
+  await page.click("#askYes");
+  await page.waitForFunction(() => window.__shared);
+  const s = await page.evaluate(() => window.__shared);
+  assert(s.type === "audio/wav" && /\.wav$/.test(s.name) && s.size > 44, "wav " + JSON.stringify(s));
+  await page.evaluate(() => { window.__shared = null; window.__refuse = false; localStorage.removeItem("simple-recorder-share-wav"); });
+});
+
+await test("waveforms are drawn", async () => {
+  await page.waitForFunction(() => [...document.querySelectorAll("#rows .mini")].length === 2);
+  const lit = await page.evaluate(() => {
+    const cv = document.getElementById("freshWave"), c = cv.getContext("2d"), d = c.getImageData(0, 0, cv.width, cv.height).data;
+    let ink = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) ink++;
+    return ink;
+  });
+  assert(lit > 50, "big waveform drawn: " + lit);
+  const peaks = await page.evaluate(async () => { const r = await new Promise(res => { const q = indexedDB.open("simple-recorder"); q.onsuccess = () => { const g = q.result.transaction("takes").objectStore("takes").getAll(); g.onsuccess = () => res(g.result); }; }); return r.map(t => t.peaks ? t.peaks.length : 0); });
+  assert(peaks.every(n => n === 800), "peaks saved " + peaks);
 });
 
 await test("rename", async () => {

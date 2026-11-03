@@ -10,8 +10,8 @@
   "display": "standalone",
   "display_override": ["standalone"],
   "orientation": "portrait",
-  "background_color": "#FFFFFF",
-  "theme_color": "#FFFFFF",
+  "background_color": "#E9E8E3",
+  "theme_color": "#E9E8E3",
   "categories": ["music", "utilities"],
   "prefer_related_applications": false,
   "icons": [
