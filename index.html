@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simple recorder</title>
+<meta name="theme-color" content="#FFFFFF">
+<meta name="color-scheme" content="only light">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Recorder">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Same look as Daily meds: Futura, white, black frames, one pastel color per day of the week */
+:root{
+  --ink:#111111; --muted:#4A4A4A; --rule:#111111; --hair:rgba(17,17,17,.16);
+  --white:#FFFFFF; --danger:#B3261E;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:only light;
+}
+body{--h:262;--s:70%;--tx:#2F4A0A}
+body[data-day="0"]{--h:22; --s:85%;--tx:#1B4A6B}
+body[data-day="1"]{--h:262;--s:70%;--tx:#2F4A0A}
+body[data-day="2"]{--h:338;--s:80%;--tx:#0A4A44}
+body[data-day="3"]{--h:176;--s:55%;--tx:#7A1F3D}
+body[data-day="4"]{--h:44; --s:75%;--tx:#3A2F86}
+body[data-day="5"]{--h:152;--s:50%;--tx:#7A1E5E}
+body[data-day="6"]{--h:208;--s:75%;--tx:#8A3412}
+
+*,*::before,*::after{box-sizing:inherit;border-radius:0}
+body{margin:0;min-height:100vh;color:var(--ink);background:var(--white);
+  font-family:Futura,"Futura PT","Jost","Century Gothic",system-ui,sans-serif;
+  font-size:17px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+[hidden]{display:none!important}
+
+.wrap{max-width:560px;margin:0 auto;padding:16px 14px 140px}
+h1.brand{margin:4px 0 14px;font-size:26px;line-height:1.1;font-weight:500;letter-spacing:-.01em}
+h1.brand span{background-image:linear-gradient(hsl(var(--h) var(--s) 81%),hsl(var(--h) var(--s) 81%));
+  background-repeat:no-repeat;background-size:100% .36em;background-position:0 88%;padding:0 .04em}
+
+/* Boxes: pastel body, white title bar, black frame */
+.box{border:3px solid var(--rule);margin-top:14px;background:hsl(var(--h) var(--s) var(--l,92%))}
+.lid{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 0 0 12px;background:var(--white);color:var(--tx);
+  border-bottom:3px solid var(--rule);font-weight:500;font-size:18px}
+.lid h2{margin:0;font:inherit}
+.lid .st{margin-left:auto;font-size:14px;padding-right:12px;font-variant-numeric:tabular-nums;color:var(--ink);font-weight:400}
+
+/* Recorder */
+.rec{--l:90%;display:flex;flex-direction:column;align-items:center;padding:26px 14px 22px;gap:14px}
+.recbtn{width:150px;height:150px;border:3px solid var(--rule);background:var(--white);display:grid;place-items:center;
+  border-radius:50%;box-shadow:0 7px 0 var(--ink);transition:transform .08s}
+.recbtn:active{transform:translateY(4px);box-shadow:0 3px 0 var(--ink)}
+.recbtn i{display:block;width:62px;height:62px;border:3px solid var(--rule);background:#F27A9B;border-radius:50%;transition:all .15s}
+.recording .recbtn i{border-radius:0;width:54px;height:54px;background:var(--ink)}
+.recbtn:disabled{opacity:.5}
+.clock{font-size:40px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:.02em;line-height:1}
+.say{font-size:17px;text-align:center;min-height:24px}
+.meter{width:100%;max-width:320px;height:14px;border:2px solid var(--rule);background:var(--white)}
+.meter i{display:block;height:100%;width:0;background:var(--ink);transition:width .05s}
+.recording .dot{display:inline-block;width:12px;height:12px;background:var(--danger);border-radius:50%;margin-right:8px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* Just recorded: three big buttons */
+.fresh{--l:86%}
+.fresh .body{padding:14px}
+.fresh .nm{font-size:18px;font-weight:500;margin:0 0 12px}
+.big3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.bigbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:84px;border:3px solid var(--rule);
+  background:var(--white);font-weight:500;font-size:16px;padding:8px 4px}
+.bigbtn svg{width:28px;height:28px}
+.bigbtn.go{background:var(--ink);color:var(--white)}
+.bigbtn:active{background:var(--ink);color:var(--white)}
+
+/* Recording list */
+.list{--l:94%}
+.row{display:flex;align-items:stretch;border-top:1px solid var(--hair);background:transparent}
+.lid + .row{border-top:0}
+.row.on{background:var(--white)}
+.play{flex:1;min-width:0;display:flex;align-items:center;gap:12px;border:0;background:transparent;text-align:left;padding:10px 12px;min-height:64px}
+.pbox{flex:none;width:40px;height:40px;border:2px solid var(--rule);background:var(--white);display:grid;place-items:center}
+.row.on .pbox{background:var(--ink);color:var(--white)}
+.pbox svg{width:18px;height:18px}
+.meta{min-width:0}
+.meta .t{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta .s{display:block;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.act{flex:none;width:56px;border:0;border-left:1px solid var(--hair);background:transparent;display:grid;place-items:center;color:var(--ink)}
+.act svg{width:22px;height:22px}
+.act:active{background:var(--ink);color:var(--white)}
+.empty{padding:16px 12px;color:var(--muted);font-size:16px}
+
+.textbtn{border:0;background:none;padding:12px 2px;text-decoration:underline;text-underline-offset:4px;font-size:15px;color:var(--muted)}
+.bin{--l:96%}
+.bin .row .meta .t{color:var(--muted)}
+.small{flex:none;border:0;border-left:1px solid var(--hair);background:transparent;padding:0 14px;font-size:15px;font-weight:500}
+
+/* Player bar along the bottom */
+.player{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--white);border-top:3px solid var(--rule);
+  box-shadow:0 -7px 0 hsl(var(--h) var(--s) 78%);padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px))}
+.player .in{max-width:560px;margin:0 auto}
+.player .nm{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px}
+.ctrl{display:flex;align-items:center;gap:10px;margin-top:8px}
+.ctrl button{flex:none;width:52px;height:52px;border:3px solid var(--rule);background:var(--white);display:grid;place-items:center}
+.ctrl button.main{background:var(--ink);color:var(--white)}
+.ctrl svg{width:22px;height:22px}
+.ctrl .tm{font-size:14px;font-variant-numeric:tabular-nums;min-width:44px;text-align:center}
+input[type=range]{flex:1;min-width:0;accent-color:var(--ink);height:32px}
+
+/* Undo bar, like Daily meds */
+.undo{position:fixed;left:12px;right:12px;bottom:16px;z-index:20;display:flex;align-items:center;gap:10px;max-width:480px;margin:0 auto;
+  padding:0 0 0 14px;border:3px solid var(--rule);background:var(--white);color:var(--ink);box-shadow:0 5px 0 hsl(var(--h) var(--s) 78%)}
+.undo span{flex:1;min-width:0;padding:12px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.undo button{flex:none;min-height:54px;padding:0 22px;border:0;border-left:3px solid var(--rule);background:var(--ink);color:var(--white);font-weight:500;font-size:18px}
+body.playing .undo{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
+
+/* Install card */
+.inst{--l:88%}
+.inst .body{padding:12px 14px 14px}
+.inst p{margin:0 0 12px}
+.inst ol{margin:0 0 12px;padding-left:22px}
+.inst li{margin:4px 0}
+.btns{display:flex;gap:10px;flex-wrap:wrap}
+.primary{border:3px solid var(--ink);background:var(--ink);color:var(--white);padding:10px 18px;min-height:50px;font-weight:500}
+.ghost{border:3px solid var(--rule);background:var(--white);padding:10px 18px;min-height:50px;font-weight:500}
+.danger{border:3px solid var(--rule);background:var(--danger);color:var(--white);padding:10px 18px;min-height:50px;font-weight:500}
+
+dialog{border:3px solid var(--rule);padding:0;width:min(480px,calc(100vw - 24px));background:var(--white);color:var(--ink)}
+dialog::backdrop{background:rgba(255,255,255,.8)}
+dialog h3{margin:0;font-size:18px;font-weight:500;color:var(--tx);border-bottom:3px solid var(--rule);padding:12px 14px;background:hsl(var(--h) var(--s) 90%)}
+dialog .body{padding:14px}
+dialog p{margin:0 0 14px;white-space:pre-line}
+dialog input[type=text]{width:100%;border:2px solid var(--rule);padding:10px;font-size:18px;margin-bottom:14px;background:var(--white)}
+dialog .btns{justify-content:flex-end}
+
+.updb{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));z-index:50;
+  font-size:16px;font-weight:500;white-space:nowrap;padding:14px 20px;background:hsl(var(--h) var(--s) 84%);color:var(--tx);border:3px solid var(--rule)}
+.fine{font-size:13px;color:var(--muted);margin:22px 2px 0}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1 class="brand"><span>Simple recorder</span></h1>
+
+  <!-- Install: shown in the browser until the app is on the home screen -->
+  <section class="box inst" id="inst" hidden>
+    <div class="lid"><h2>Put it on your home screen</h2></div>
+    <div class="body">
+      <div id="instAndroid" hidden>
+        <p>Install this as an app so it opens with one tap, like any other app.</p>
+        <div class="btns"><button class="primary" id="instBtn">Install app</button><button class="ghost" id="instLater">Not now</button></div>
+      </div>
+      <div id="instIos" hidden>
+        <p>To keep this as an app on your iPhone:</p>
+        <ol><li>Tap the <b>Share</b> button (square with an arrow up).</li><li>Tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>.</li></ol>
+        <div class="btns"><button class="ghost" id="instLater2">Got it</button></div>
+      </div>
+      <div id="instOther" hidden>
+        <p>To install it, open the browser's <b>⋮</b> menu and choose <b>Install app</b> or <b>Add to Home screen</b>.</p>
+        <div class="btns"><button class="ghost" id="instLater3">Got it</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recorder -->
+  <section class="box rec" id="rec">
+    <button class="recbtn" id="recBtn" type="button" aria-label="Start recording"><i></i></button>
+    <div class="clock" id="clock">0:00</div>
+    <div class="meter" aria-hidden="true"><i id="lvl"></i></div>
+    <div class="say" id="say">Tap the button to record</div>
+  </section>
+
+  <!-- The take just recorded -->
+  <section class="box fresh" id="fresh" hidden>
+    <div class="lid"><h2>Saved</h2><span class="st" id="freshLen"></span></div>
+    <div class="body">
+      <p class="nm" id="freshName"></p>
+      <div class="big3">
+        <button class="bigbtn" id="fPlay" type="button"><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>Listen</button>
+        <button class="bigbtn go" id="fMail" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14"/><path d="M3 6l9 7 9-7"/></svg>Email</button>
+        <button class="bigbtn" id="fDel" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Delete</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- All recordings -->
+  <section class="box list" id="list">
+    <div class="lid"><h2>My recordings</h2><span class="st" id="count"></span></div>
+    <div id="rows"></div>
+  </section>
+
+  <button class="textbtn" id="binBtn" type="button" hidden></button>
+  <section class="box bin" id="bin" hidden>
+    <div class="lid"><h2>Recently deleted</h2><span class="st">kept 30 days</span></div>
+    <div id="binRows"></div>
+  </section>
+
+  <p class="fine">Recordings stay on this phone. Email one to keep a copy somewhere safe.</p>
+</main>
+
+<div class="player" id="player" hidden>
+  <div class="in">
+    <div class="nm" id="pName"></div>
+    <div class="ctrl">
+      <button id="pPrev" type="button" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z" fill="currentColor"/></svg></button>
+      <button id="pPlay" class="main" type="button" aria-label="Pause"></button>
+      <button id="pNext" type="button" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z" fill="currentColor"/></svg></button>
+      <span class="tm" id="pTime">0:00</span>
+      <input type="range" id="pSeek" min="0" max="1000" value="0" aria-label="Position">
+    </div>
+  </div>
+</div>
+
+<div class="undo" id="undo" hidden><span id="undoMsg"></span><button id="undoBtn" type="button">Undo</button></div>
+
+<dialog id="askDlg">
+  <h3 id="askTitle">Simple recorder</h3>
+  <div class="body">
+    <p id="askMsg"></p>
+    <input type="text" id="askInput" hidden autocomplete="off">
+    <div class="btns"><button class="ghost" id="askNo" type="button">Cancel</button><button class="primary" id="askYes" type="button">OK</button></div>
+  </div>
+</dialog>
+
+<audio id="audio" preload="auto"></audio>
+
+<script>
+"use strict";
+document.body.dataset.day = new Date().getDay();
+
+/* ---------- icons ---------- */
+const IC = {
+  play:'<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>',
+  pause:'<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor"/></svg>',
+  mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14"/><path d="M3 6l9 7 9-7"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  pen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>'
+};
+const $ = id => document.getElementById(id);
+const fmt = s => { s = Math.max(0, Math.round(s || 0)); const m = Math.floor(s / 60); return m + ":" + String(s % 60).padStart(2, "0"); };
+const when = ts => { const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) + " · " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); };
+
+/* ---------- ask / tell dialogs ---------- */
+function ask(msg, o = {}) {
+  const d = $("askDlg"), inp = $("askInput");
+  $("askTitle").textContent = o.title || "Simple recorder";
+  $("askMsg").textContent = msg;
+  $("askYes").textContent = o.ok || "OK";
+  $("askYes").className = o.danger ? "danger" : "primary";
+  $("askNo").hidden = o.cancel === null;
+  $("askNo").textContent = o.cancel || "Cancel";
+  inp.hidden = o.input === undefined; inp.value = o.input || "";
+  return new Promise(res => {
+    const done = v => { d.close(); $("askYes").onclick = $("askNo").onclick = null; d.onclose = null; res(v); };
+    $("askYes").onclick = () => done(o.input !== undefined ? inp.value.trim() : true);
+    $("askNo").onclick = () => done(null);
+    d.onclose = () => res(null);
+    d.showModal();
+    if (!inp.hidden) { inp.focus(); inp.select(); inp.onkeydown = e => { if (e.key === "Enter") $("askYes").click(); }; }
+  });
+}
+const tell = (msg, title) => ask(msg, { cancel: null, title });
+
+/* ---------- storage: IndexedDB keeps the audio on the phone ---------- */
+const DB_NAME = "simple-recorder", STORE = "takes";
+let dbp = null;
+function db() {
+  if (!dbp) dbp = new Promise((res, rej) => {
+    const r = indexedDB.open(DB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: "id" });
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  return dbp;
+}
+async function tx(mode, fn) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const t = d.transaction(STORE, mode), s = t.objectStore(STORE); let out;
+    const r = fn(s); if (r) r.onsuccess = () => out = r.result;
+    t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+  });
+}
+const putTake = t => tx("readwrite", s => s.put(t));
+const killTake = id => tx("readwrite", s => s.delete(id));
+const allTakes = () => tx("readonly", s => s.getAll());
+
+let takes = [];   // newest first
+const live = () => takes.filter(t => !t.deleted);
+const binned = () => takes.filter(t => t.deleted).sort((a, b) => b.deleted - a.deleted);
+async function load() {
+  takes = (await allTakes()) || [];
+  const old = Date.now() - 30 * 864e5;   // deleted recordings are kept 30 days, then removed for good
+  for (const t of takes.filter(t => t.deleted && t.deleted < old)) await killTake(t.id);
+  takes = takes.filter(t => !(t.deleted && t.deleted < old)).sort((a, b) => b.created - a.created);
+}
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
+
+/* ---------- recording ----------
+   Phone mics normally clean up speech (echo cancelling, noise removal, automatic volume). That ruins guitar,
+   so it's all turned off. Recordings are saved as .m4a where the phone can, since that plays everywhere. */
+const TYPES = ["audio/mp4;codecs=mp4a.40.2", "audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"];
+const pickType = () => (window.MediaRecorder && MediaRecorder.isTypeSupported) ? (TYPES.find(t => MediaRecorder.isTypeSupported(t)) || "") : "";
+const extOf = type => /mp4/.test(type) ? "m4a" : /ogg/.test(type) ? "ogg" : "webm";
+
+let rec = null, stream = null, chunks = [], t0 = 0, tick = null, actx = null, raf = 0, wake = null, busy = false;
+
+async function startRec() {
+  if (busy) return; busy = true;
+  stopPlay();
+  // Made during the tap itself: phones keep audio made later, after the mic question, switched off
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) { actx = null; }
+  try {
+    if (!navigator.mediaDevices || !window.MediaRecorder) throw new Error("nosupport");
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch (e) {
+    busy = false;
+    try { actx && actx.close(); } catch (err) {} actx = null;
+    if (e.message === "nosupport") return tell("This browser can't record. Open the app in Chrome (Android) or Safari (iPhone).");
+    return tell("The app needs the microphone to record.\n\nWhen your phone asks, tap Allow. If you said no before, open the browser's site settings for this page and allow the microphone.", "Microphone");
+  }
+  const type = pickType();
+  try { rec = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 192000 } : {}); }
+  catch (e) { rec = new MediaRecorder(stream); }
+  chunks = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.onstop = saveRec;
+  rec.start(1000);
+  t0 = Date.now();
+  document.body.classList.add("recording");
+  $("recBtn").setAttribute("aria-label", "Stop recording");
+  $("say").innerHTML = '<span class="dot"></span>Recording… tap to stop';
+  $("fresh").hidden = true;
+  tick = setInterval(() => $("clock").textContent = fmt((Date.now() - t0) / 1000), 250);
+  meter();
+  try { wake = await navigator.wakeLock.request("screen"); } catch (e) { wake = null; }   // keep the screen on while recording
+  busy = false;
+}
+function meter() {
+  try {
+    if (!actx) return;
+    if (actx.state === "suspended") actx.resume();
+    const an = actx.createAnalyser(); an.fftSize = 1024;
+    actx.createMediaStreamSource(stream).connect(an);
+    const buf = new Float32Array(an.fftSize);
+    const draw = () => {
+      an.getFloatTimeDomainData(buf);
+      let pk = 0; for (const v of buf) pk = Math.max(pk, Math.abs(v));
+      $("lvl").style.width = Math.min(100, Math.round(pk * 100)) + "%";
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+  } catch (e) {}
+}
+function stopRec() {
+  if (!rec || rec.state === "inactive") return;
+  rec.stop();
+}
+async function saveRec() {
+  const dur = (Date.now() - t0) / 1000, type = (rec && rec.mimeType) || pickType() || "audio/webm";
+  clearInterval(tick); cancelAnimationFrame(raf);
+  try { actx && actx.close(); } catch (e) {}
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  try { wake && wake.release(); } catch (e) {}
+  rec = stream = actx = wake = null;
+  document.body.classList.remove("recording");
+  $("recBtn").setAttribute("aria-label", "Start recording");
+  $("lvl").style.width = "0";
+  $("clock").textContent = "0:00";
+  $("say").textContent = "Tap the button to record";
+  const blob = new Blob(chunks, { type: type.split(";")[0] }); chunks = [];
+  if (!blob.size) return tell("Nothing was recorded. Try again.");
+  const now = Date.now();
+  const t = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), created: now, name: when(now), dur, type: blob.type, blob, deleted: 0 };
+  try { await putTake(t); }
+  catch (e) { return tell("The recording couldn't be saved. The phone may be out of space."); }
+  takes.unshift(t);
+  freshId = t.id;
+  render();
+}
+$("recBtn").onclick = () => (rec && rec.state === "recording") ? stopRec() : startRec();
+// If the app goes to the background mid-take, finish and save it rather than lose it
+document.addEventListener("visibilitychange", () => { if (document.hidden && rec && rec.state === "recording") stopRec(); });
+
+/* ---------- email: the share sheet hands the file to Gmail / Mail with it already attached ---------- */
+function fileOf(t) {
+  const safe = t.name.replace(/[\\/:*?"<>|·]+/g, "-").replace(/\s+/g, " ").replace(/-+/g, "-").trim();
+  return new File([t.blob], safe + "." + extOf(t.type), { type: t.type });
+}
+async function emailTake(t) {
+  const file = fileOf(t);
+  const data = { files: [file], title: t.name, text: t.name + " (" + fmt(t.dur) + ")" };
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share(data); }
+    catch (e) { if (e.name !== "AbortError") tell("Couldn't open the share menu. Try again."); }
+    return;
+  }
+  // No share sheet (some computers): save the file and open a new email to attach it to
+  const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  await tell("This browser can't attach files to email by itself, so the recording was saved to your Downloads.\n\nAn email will open next: attach " + file.name + " to it.", "Email");
+  location.href = "mailto:?subject=" + encodeURIComponent(t.name) + "&body=" + encodeURIComponent("Recording attached.");
+}
+
+/* ---------- delete, undo, recently deleted ---------- */
+let undoTimer = 0, undoFn = null;
+function showUndo(msg, fn) {
+  clearTimeout(undoTimer); undoFn = fn;
+  $("undoMsg").textContent = msg; $("undo").hidden = false;
+  undoTimer = setTimeout(hideUndo, 10000);
+}
+function hideUndo() { $("undo").hidden = true; undoFn = null; }
+$("undoBtn").onclick = () => { const f = undoFn; hideUndo(); f && f(); };
+
+async function delTake(t) {
+  if (cur && cur.id === t.id) stopPlay();
+  t.deleted = Date.now(); await putTake(t);
+  if (freshId === t.id) freshId = null;
+  render();
+  showUndo("Recording deleted", async () => { t.deleted = 0; await putTake(t); render(); });
+}
+async function restoreTake(t) { t.deleted = 0; await putTake(t); render(); }
+async function purgeTake(t) {
+  const ok = await ask("Delete “" + t.name + "” for good? This can't be undone.", { ok: "Delete", danger: true, title: "Delete for good" });
+  if (!ok) return;
+  await killTake(t.id); takes = takes.filter(x => x !== t); render();
+}
+async function renameTake(t) {
+  const n = await ask("Name this recording:", { input: t.name, ok: "Save", title: "Rename" });
+  if (!n) return;
+  t.name = n.slice(0, 80); await putTake(t); render();
+}
+
+/* ---------- player: the list is a playlist, newest first; when one ends the next plays ---------- */
+const audio = $("audio");
+let cur = null, url = null, freshId = null, binOpen = false;
+function playTake(t) {
+  if (rec && rec.state === "recording") return;
+  if (cur && cur.id === t.id) { audio.paused ? audio.play() : audio.pause(); return; }
+  if (url) URL.revokeObjectURL(url);
+  cur = t; url = URL.createObjectURL(t.blob);
+  audio.src = url; audio.play().catch(() => {});
+  if ("mediaSession" in navigator) { try { navigator.mediaSession.metadata = new MediaMetadata({ title: t.name, artist: "Simple recorder" }); } catch (e) {} }
+  $("player").hidden = false; document.body.classList.add("playing");
+  paint();
+}
+function stopPlay() {
+  audio.pause(); audio.removeAttribute("src"); audio.load();
+  if (url) URL.revokeObjectURL(url); url = null; cur = null;
+  $("player").hidden = true; document.body.classList.remove("playing");
+  paint();
+}
+function step(n) {
+  const L = live(); if (!cur || !L.length) return;
+  const i = L.findIndex(t => t.id === cur.id) + n;
+  if (i >= 0 && i < L.length) playTake(L[i]); else if (n > 0) stopPlay();
+}
+$("pPlay").onclick = () => cur && (audio.paused ? audio.play() : audio.pause());
+$("pPrev").onclick = () => { if (audio.currentTime > 3) audio.currentTime = 0; else step(-1); };
+$("pNext").onclick = () => step(1);
+audio.onended = () => step(1);
+audio.onplay = audio.onpause = paint;
+let seeking = false;
+$("pSeek").oninput = () => { seeking = true; const d = audio.duration && isFinite(audio.duration) ? audio.duration : (cur && cur.dur) || 0; $("pTime").textContent = fmt(d * $("pSeek").value / 1000); };
+$("pSeek").onchange = () => { const d = audio.duration && isFinite(audio.duration) ? audio.duration : (cur && cur.dur) || 0; audio.currentTime = d * $("pSeek").value / 1000; seeking = false; };
+audio.ontimeupdate = () => {
+  if (seeking || !cur) return;
+  const d = audio.duration && isFinite(audio.duration) ? audio.duration : cur.dur || 0;
+  $("pTime").textContent = fmt(audio.currentTime);
+  $("pSeek").value = d ? Math.round(audio.currentTime / d * 1000) : 0;
+};
+function paint() {
+  const on = cur && !audio.paused;
+  $("pPlay").innerHTML = on ? IC.pause : IC.play;
+  $("pPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  if (cur) $("pName").textContent = cur.name;
+  document.querySelectorAll("#rows .row").forEach(r => {
+    const me = cur && r.dataset.id === cur.id;
+    r.classList.toggle("on", !!me);
+    r.querySelector(".pbox").innerHTML = me && on ? IC.pause : IC.play;
+  });
+  if (freshId) $("fPlay").lastChild.textContent = (cur && cur.id === freshId && on) ? "Pause" : "Listen";
+}
+
+/* ---------- drawing the page ---------- */
+function btn(cls, html, label, fn) { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.innerHTML = html; if (label) b.setAttribute("aria-label", label); b.onclick = fn; return b; }
+function render() {
+  const L = live(), rows = $("rows"); rows.textContent = "";
+  $("count").textContent = L.length ? L.length + (L.length === 1 ? " take" : " takes") : "";
+  if (!L.length) rows.innerHTML = '<div class="empty">No recordings yet. Tap the big button to make one.</div>';
+  for (const t of L) {
+    const r = document.createElement("div"); r.className = "row"; r.dataset.id = t.id;
+    const p = btn("play", '<span class="pbox"></span><span class="meta"><span class="t"></span><span class="s"></span></span>', "Play " + t.name, () => playTake(t));
+    p.querySelector(".t").textContent = t.name;
+    p.querySelector(".s").textContent = fmt(t.dur);
+    r.append(p, btn("act", IC.pen, "Rename", () => renameTake(t)), btn("act", IC.mail, "Email", () => emailTake(t)), btn("act", IC.trash, "Delete", () => delTake(t)));
+    rows.append(r);
+  }
+  // The take just made gets its own box with big buttons
+  const f = freshId && takes.find(t => t.id === freshId && !t.deleted);
+  $("fresh").hidden = !f;
+  if (f) { $("freshName").textContent = f.name; $("freshLen").textContent = fmt(f.dur); }
+  // Recently deleted
+  const B = binned();
+  $("binBtn").hidden = !B.length;
+  $("binBtn").textContent = binOpen ? "Hide recently deleted" : "Recently deleted (" + B.length + ")";
+  $("bin").hidden = !binOpen || !B.length;
+  const br = $("binRows"); br.textContent = "";
+  for (const t of B) {
+    const r = document.createElement("div"); r.className = "row";
+    const m = document.createElement("div"); m.className = "play"; m.innerHTML = '<span class="meta"><span class="t"></span><span class="s"></span></span>';
+    m.querySelector(".t").textContent = t.name; m.querySelector(".s").textContent = fmt(t.dur);
+    r.append(m, btn("small", "Restore", null, () => restoreTake(t)), btn("small", "Delete", "Delete for good", () => purgeTake(t)));
+    br.append(r);
+  }
+  paint();
+}
+$("binBtn").onclick = () => { binOpen = !binOpen; render(); };
+$("fPlay").onclick = () => { const t = takes.find(t => t.id === freshId); t && playTake(t); };
+$("fMail").onclick = () => { const t = takes.find(t => t.id === freshId); t && emailTake(t); };
+$("fDel").onclick = () => { const t = takes.find(t => t.id === freshId); t && delTake(t); };
+
+/* ---------- install ----------
+   Android Chrome offers its own install prompt, which a web page may only open from a tap, so a card with an
+   Install button shows until the app is installed. iPhones have no prompt: the card says how to add it instead.
+   "Not now" hides the card for a week. */
+const INST_KEY = "simple-recorder-inst-later";
+let installEvt = null;
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isPhone = isIos || /android/i.test(navigator.userAgent);
+function installUI() {
+  let later = 0; try { later = +localStorage.getItem(INST_KEY) || 0; } catch (e) {}
+  const show = !standalone() && Date.now() - later > 7 * 864e5 && (installEvt || isPhone);
+  $("inst").hidden = !show;
+  $("instAndroid").hidden = !installEvt;
+  $("instIos").hidden = !!installEvt || !isIos;
+  $("instOther").hidden = !!installEvt || isIos;
+}
+function later() { try { localStorage.setItem(INST_KEY, String(Date.now())); } catch (e) {} installUI(); }
+$("instLater").onclick = $("instLater2").onclick = $("instLater3").onclick = later;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; installUI(); });
+window.addEventListener("appinstalled", () => { installEvt = null; installUI(); tell("Installed. You'll find Recorder on your home screen."); });
+$("instBtn").onclick = async () => {
+  if (!installEvt) return;
+  const e = installEvt; installEvt = null; e.prompt();
+  try { await e.userChoice; } catch (err) {}
+  installUI();
+};
+
+/* ---------- updates (same as Daily meds) ----------
+   The installed app has no pull-to-refresh, so it checks for a new version when it opens and whenever it comes
+   back to the front, and shows a button when one is ready. Recordings are kept either way.
+   Bump CACHE in sw.js whenever you change this file. */
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+const hadSW = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+function updBanner() {
+  if ($("updB")) return;
+  const b = document.createElement("button");
+  b.id = "updB"; b.className = "updb"; b.type = "button"; b.textContent = "New version ready · tap to update";
+  b.onclick = () => { if (rec && rec.state === "recording") return tell("Stop recording first, then tap update."); location.reload(); };
+  document.body.append(b);
+}
+let updLast = 0;
+async function checkUpdate() {
+  if (!navigator.serviceWorker || location.protocol !== "https:") return;
+  if (Date.now() - updLast < 3600000) return;
+  updLast = Date.now();
+  try { const r = await navigator.serviceWorker.getRegistration(); if (r) await r.update(); } catch (e) {}
+}
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadSW) updBanner(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkUpdate(); });
+setTimeout(checkUpdate, 3000);
+
+installUI();
+load().then(render).catch(() => { render(); tell("Recordings couldn't be loaded on this browser."); });
+</script>
+</body>
+</html>
