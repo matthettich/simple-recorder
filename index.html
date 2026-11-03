@@ -12,16 +12,22 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="./icon.svg?v=4" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon-192.png?v=4">
-<link rel="preload" href="fonts/JetBrainsMono-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/InterDisplay-Bold.woff" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="fonts/Inter-Regular.woff" as="font" type="font/woff" crossorigin>
 <style>
-/* Thunder Plus's IDM skin: warm grey paper, black ink, JetBrains Mono, bold uppercase titles,
+/* Thunder Plus's IDM skin: warm grey paper, black ink, bold uppercase titles,
    hazard orange for record and playing, blue for the main action (Thunder's EDIT key) */
+@font-face{font-family:Inter; src:url(fonts/Inter-Regular.woff) format("woff"); font-weight:400; font-display:swap}
+@font-face{font-family:Inter; src:url(fonts/Inter-SemiBold.woff) format("woff"); font-weight:500 600; font-display:swap}
+@font-face{font-family:"Inter Display"; src:url(fonts/InterDisplay-Bold.woff) format("woff"); font-weight:700 900; font-display:swap}
 @font-face{font-family:"JetBrains Mono"; src:url(fonts/JetBrainsMono-400.woff2) format("woff2"); font-weight:400 500; font-display:swap}
-@font-face{font-family:"JetBrains Mono"; src:url(fonts/JetBrainsMono-700.woff2) format("woff2"); font-weight:600 900; font-display:swap}
 :root{
   --mx:#141414; --mx2:#505050; --mxdim:#bdbcb6; --mxbg:#e9e8e3; --mxpanel:#f2f1ec; --mxpanel2:#dddcd5; --mxon:#ffffff;
   --orange:#ff4d00; --blue:#2a6cff;
-  --font:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  /* Inter for reading and the big type (a Swiss grotesk, like Braun/TE); JetBrains Mono, as in Thunder Plus, for small readouts */
+  --font:Inter,"Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;
+  --display:"Inter Display",Inter,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
@@ -29,27 +35,27 @@
 }
 *,*::before,*::after{box-sizing:inherit;border-radius:0}
 body{margin:0;min-height:100vh;color:var(--mx);background:var(--mxbg);font-family:var(--font);
-  font-size:19px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+  font-size:19px;line-height:1.4;-webkit-tap-highlight-color:transparent;font-feature-settings:"cv11","ss01"}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--mx);outline-offset:2px}
 [hidden]{display:none!important}
 
 .wrap{max-width:560px;margin:0 auto;padding:16px 14px 150px}
-h1.brand{margin:6px 0 16px;font-size:24px;line-height:1.1;font-weight:700;text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:12px}
-h1.brand::before{content:"";width:18px;height:18px;border-radius:50%;background:var(--orange);flex:none}
+h1.brand{margin:6px 0 16px;font-family:var(--display);font-size:26px;line-height:1.1;font-weight:800;text-transform:uppercase;letter-spacing:.02em;display:flex;align-items:center;gap:10px}
+h1.brand::before{content:"";width:16px;height:16px;border-radius:50%;background:var(--orange);flex:none}
 
 /* Panels: paper panel, grey title strip, 2px ink frame */
 .box{border:2px solid var(--mx);margin-top:14px;background:var(--mxpanel)}
 .lid{display:flex;align-items:center;gap:8px;min-height:48px;padding:0 0 0 12px;background:var(--mxpanel2);color:var(--mx);
-  border-bottom:2px solid var(--mx);font-weight:700;font-size:16px;text-transform:uppercase;letter-spacing:.08em}
+  border-bottom:2px solid var(--mx);font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.1em}
 .lid h2{margin:0;font:inherit}
-.lid .st{margin-left:auto;font-size:16px;padding-right:12px;font-variant-numeric:tabular-nums;color:var(--mx2);font-weight:400;letter-spacing:0;text-transform:none}
+.lid .st{margin-left:auto;font-family:var(--mono);font-size:15px;padding-right:12px;font-variant-numeric:tabular-nums;color:var(--mx2);font-weight:400;letter-spacing:0;text-transform:none}
 
 /* Recorder: the tape-deck key. REC: orange dot; recording: the key lights orange with a black stop square */
 .rec{display:flex;flex-direction:column;align-items:center;padding:26px 14px 22px;gap:16px;background:var(--mxpanel)}
 .recbtn{width:min(270px,100%);height:120px;border:2px solid var(--mx);background:var(--mxbg);color:var(--mx);
-  display:flex;align-items:center;justify-content:center;gap:20px;font-size:26px;font-weight:700;letter-spacing:.2em;
+  display:flex;align-items:center;justify-content:center;gap:20px;font-family:var(--display);font-size:28px;font-weight:800;letter-spacing:.16em;
   box-shadow:inset 0 -6px 0 var(--mxpanel2);transition:background .1s}
 .recbtn:active{background:var(--mxpanel2);box-shadow:none}
 .recbtn i{flex:none;display:block;width:44px;height:44px;background:var(--orange);border-radius:50%;border:2px solid var(--mx)}
@@ -57,7 +63,7 @@ h1.brand::before{content:"";width:18px;height:18px;border-radius:50%;background:
 .recording .recbtn{background:var(--orange);color:var(--mx);box-shadow:none}
 .recording .recbtn i{border-radius:0;width:36px;height:36px;background:var(--mx)}
 .recbtn:disabled{opacity:.5}
-.clock{font-size:52px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.04em;line-height:1}
+.clock{font-family:var(--display);font-size:60px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1}
 .say{font-size:18px;text-align:center;min-height:26px;color:var(--mx2)}
 .recording .say{color:var(--mx)}
 .meter{width:100%;max-width:340px;height:16px;border:2px solid var(--mx);background:var(--mxbg)}
@@ -68,11 +74,11 @@ h1.brand::before{content:"";width:18px;height:18px;border-radius:50%;background:
 
 /* Just recorded: Email (blue) across the top, Listen and Delete under it */
 .fresh .body{padding:14px}
-.fresh .nm{font-size:19px;font-weight:700;margin:0 0 12px}
+.fresh .nm{font-size:20px;font-weight:600;margin:0 0 12px}
 .big3{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .big3 .go{grid-column:1/-1;order:-1;flex-direction:row;gap:14px;font-size:20px}
 .bigbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:88px;border:2px solid var(--mx);
-  background:var(--mxbg);font-weight:700;font-size:18px;padding:8px 4px}
+  background:var(--mxbg);font-weight:600;font-size:18px;padding:8px 4px}
 .bigbtn svg{width:30px;height:30px}
 .bigbtn.go{background:var(--blue);color:var(--mxon)}
 .bigbtn:active{background:var(--mx);color:var(--mxon)}
@@ -87,10 +93,10 @@ h1.brand::before{content:"";width:18px;height:18px;border-radius:50%;background:
 .row.on .pbox{background:var(--orange);color:var(--mx)}
 .pbox svg{width:18px;height:18px}
 .meta{min-width:0}
-.meta .t{display:block;font-weight:700;overflow-wrap:anywhere;line-height:1.25}
-.meta .s{display:block;font-size:16px;color:var(--mx2);font-variant-numeric:tabular-nums}
+.meta .t{display:block;font-weight:600;overflow-wrap:anywhere;line-height:1.25}
+.meta .s{display:block;font-family:var(--mono);font-size:15px;color:var(--mx2);font-variant-numeric:tabular-nums}
 .act{flex:1 1 0;min-height:52px;border:0;border-top:1px solid var(--mxdim);background:transparent;display:flex;align-items:center;justify-content:center;
-  gap:8px;color:var(--mx);font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:6px 4px}
+  gap:8px;color:var(--mx);font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;padding:6px 4px}
 .act+.act{border-left:1px solid var(--mxdim)}
 .act svg{width:20px;height:20px}
 .act:active{background:var(--mx);color:var(--mxon)}
@@ -100,26 +106,26 @@ h1.brand::before{content:"";width:18px;height:18px;border-radius:50%;background:
 .bin .row .meta .t{color:var(--mx2)}
 .bin .row{flex-wrap:nowrap;border-top:1px solid var(--mxdim)}
 .bin .row .play{flex:1 1 auto}
-.small{flex:none;border:0;border-left:1px solid var(--mxdim);background:transparent;padding:0 14px;font-size:15px;font-weight:700;text-transform:uppercase}
+.small{flex:none;border:0;border-left:1px solid var(--mxdim);background:transparent;padding:0 14px;font-size:15px;font-weight:600;text-transform:uppercase}
 
 /* Player strip along the bottom */
 .player{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--mxpanel2);border-top:2px solid var(--mx);
   padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px))}
 .player .in{max-width:560px;margin:0 auto}
-.player .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:17px}
+.player .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:17px}
 .ctrl{display:flex;align-items:center;gap:10px;margin-top:8px}
 .ctrl button{flex:none;width:58px;height:58px;border:2px solid var(--mx);background:var(--mxbg);display:grid;place-items:center}
 .ctrl button.main{background:var(--mx);color:var(--mxon)}
 body.playing:not(.paused) .ctrl button.main{background:var(--orange);color:var(--mx)}
 .ctrl svg{width:22px;height:22px}
-.ctrl .tm{font-size:16px;font-variant-numeric:tabular-nums;min-width:48px;text-align:center}
+.ctrl .tm{font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums;min-width:48px;text-align:center}
 input[type=range]{flex:1;min-width:0;accent-color:var(--mx);height:32px}
 
 /* Undo bar */
 .undo{position:fixed;left:12px;right:12px;bottom:16px;z-index:20;display:flex;align-items:center;gap:10px;max-width:480px;margin:0 auto;
   padding:0 0 0 14px;border:2px solid var(--mx);background:var(--mxpanel);color:var(--mx);box-shadow:6px 6px 0 var(--mx)}
 .undo span{flex:1;min-width:0;padding:12px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.undo button{flex:none;min-height:56px;padding:0 22px;border:0;border-left:2px solid var(--mx);background:var(--orange);color:var(--mx);font-weight:700;font-size:19px;text-transform:uppercase;letter-spacing:.08em}
+.undo button{flex:none;min-height:56px;padding:0 22px;border:0;border-left:2px solid var(--mx);background:var(--orange);color:var(--mx);font-weight:600;font-size:18px;text-transform:uppercase;letter-spacing:.1em}
 body.playing .undo{bottom:calc(160px + env(safe-area-inset-bottom,0px))}
 
 /* Install card */
@@ -128,14 +134,14 @@ body.playing .undo{bottom:calc(160px + env(safe-area-inset-bottom,0px))}
 .inst ol{margin:0 0 12px;padding-left:24px}
 .inst li{margin:4px 0}
 .btns{display:flex;gap:10px;flex-wrap:wrap}
-.primary,.ghost,.danger{border:2px solid var(--mx);padding:12px 20px;min-height:58px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:17px}
+.primary,.ghost,.danger{border:2px solid var(--mx);padding:12px 20px;min-height:58px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:16px}
 .primary{background:var(--blue);color:var(--mxon)}
 .ghost{background:var(--mxbg);color:var(--mx)}
 .danger{background:var(--orange);color:var(--mx)}
 
 dialog{border:2px solid var(--mx);padding:0;width:min(480px,calc(100vw - 24px));background:var(--mxpanel);color:var(--mx);box-shadow:8px 8px 0 var(--mx)}
 dialog::backdrop{background:rgba(233,232,227,.85)}
-dialog h3{margin:0;font-size:17px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid var(--mx);padding:13px 14px;background:var(--mxpanel2)}
+dialog h3{margin:0;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;border-bottom:2px solid var(--mx);padding:13px 14px;background:var(--mxpanel2)}
 dialog .body{padding:16px}
 dialog ol{margin:0 0 16px;padding-left:26px}
 dialog li{margin:8px 0}
@@ -144,27 +150,25 @@ dialog input[type=text]{width:100%;border:2px solid var(--mx);padding:12px;font-
 dialog .btns{justify-content:flex-end}
 
 .updb{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));z-index:50;
-  font-size:17px;font-weight:700;white-space:nowrap;padding:16px 22px;background:var(--orange);color:var(--mx);border:2px solid var(--mx);box-shadow:6px 6px 0 var(--mx)}
+  font-size:17px;font-weight:600;white-space:nowrap;padding:16px 22px;background:var(--orange);color:var(--mx);border:2px solid var(--mx);box-shadow:6px 6px 0 var(--mx)}
 .fine{font-size:15px;color:var(--mx2);margin:22px 2px 0}
 .sending{opacity:.6;pointer-events:none}
 /* Header + settings */
-/* Title centred on the page; the gear sits in the right-hand column, an empty one balances it on the left */
-header.top{display:grid;grid-template-columns:48px 1fr 48px;align-items:center;gap:8px;margin:6px 0 16px}
-header.top h1.brand{margin:0;grid-column:2;justify-content:center;text-align:center;white-space:nowrap;font-size:clamp(17px,5.4vw,24px);letter-spacing:.05em;gap:10px}
-header.top h1.brand::before{width:14px;height:14px}
-header.top .setbtn{grid-column:3}
+/* Title on the left, the gear on the right */
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 16px}
+header.top h1.brand{margin:0;white-space:nowrap;min-width:0}
 .setbtn{display:grid;place-items:center;width:48px;height:48px;border:2px solid var(--mx);background:var(--mxpanel);padding:0}
-.setbtn svg{width:24px;height:24px}
+.setbtn svg{width:28px;height:28px}
 .setbtn:active{background:var(--mx);color:var(--mxon)}
-.src{border:1px solid var(--mxdim);background:transparent;color:var(--mx2);font-size:14px;padding:6px 10px;text-align:center;max-width:100%;
+.src{border:1px solid var(--mxdim);background:transparent;color:var(--mx2);font-family:var(--mono);font-size:13px;padding:6px 10px;text-align:center;max-width:100%;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .recording .src{pointer-events:none}
-dialog .sec{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mx2);margin:4px 0 8px}
+dialog .sec{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--mx2);margin:4px 0 8px}
 dialog .sec ~ .sec{margin-top:20px}
 .opts{display:flex;flex-direction:column;gap:8px}
 .opt{display:flex;gap:12px;align-items:flex-start;border:2px solid var(--mx);background:var(--mxbg);padding:12px;cursor:pointer}
 .opt input{width:24px;height:24px;margin:2px 0 0;accent-color:var(--mx);flex:none}
-.opt b{display:block;font-size:18px}
+.opt b{display:block;font-size:18px;font-weight:600}
 .opt span{display:block;font-size:15px;color:var(--mx2);margin-top:2px}
 .opt:has(input:checked){background:var(--mxpanel);box-shadow:inset 6px 0 0 var(--orange)}
 dialog select{width:100%;min-height:56px;border:2px solid var(--mx);background:var(--mxbg);font:inherit;font-size:18px;padding:0 10px;color:var(--mx)}
@@ -177,7 +181,7 @@ dialog select{width:100%;min-height:56px;border:2px solid var(--mx);background:v
 </head>
 <body>
 <main class="wrap">
-  <header class="top"><h1 class="brand">Simple recorder</h1><button class="setbtn" id="setBtn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button></header>
+  <header class="top"><h1 class="brand">Simple recorder</h1><button class="setbtn" id="setBtn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M20.22 9.46 L22.98 9.77 L22.98 14.23 L20.22 14.54 L19.61 16.01 L21.34 18.19 L18.19 21.34 L16.01 19.61 L14.54 20.22 L14.23 22.98 L9.77 22.98 L9.46 20.22 L7.99 19.61 L5.81 21.34 L2.66 18.19 L4.39 16.01 L3.78 14.54 L1.02 14.23 L1.02 9.77 L3.78 9.46 L4.39 7.99 L2.66 5.81 L5.81 2.66 L7.99 4.39 L9.46 3.78 L9.77 1.02 L14.23 1.02 L14.54 3.78 L16.01 4.39 L18.19 2.66 L21.34 5.81 L19.61 7.99 Z M15.4 12 A3.4 3.4 0 1 0 8.6 12 A3.4 3.4 0 1 0 15.4 12 Z"/></svg></button></header>
 
   <!-- Install: shown in the browser until the app is on the home screen -->
   <section class="box inst" id="inst" hidden>
