@@ -77,6 +77,10 @@ h1.brand::before{content:"";width:16px;height:16px;border-radius:50%;background:
 .fresh .nm{font-size:20px;font-weight:600;margin:0 0 12px}
 .big3{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .big3 .go{grid-column:1/-1;order:-1;flex-direction:row;gap:14px;font-size:20px}
+/* On a computer: Listen · Download · Delete under Email */
+.desktop .big3{grid-template-columns:1fr 1fr 1fr}
+.desktop #fSave{order:0}
+.desktop #fDel{order:1}
 .bigbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:88px;border:2px solid var(--mx);
   background:var(--mxbg);font-weight:600;font-size:18px;padding:8px 4px}
 .bigbtn svg{width:30px;height:30px}
@@ -222,6 +226,7 @@ dialog select{width:100%;min-height:56px;border:2px solid var(--mx);background:v
         <button class="bigbtn" id="fPlay" type="button"><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>Listen</button>
         <button class="bigbtn go" id="fMail" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14"/><path d="M3 6l9 7 9-7"/></svg>Email to myself</button>
         <button class="bigbtn" id="fDel" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Delete this</button>
+        <button class="bigbtn desk" id="fSave" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>Download</button>
       </div>
     </div>
   </section>
@@ -298,10 +303,15 @@ dialog select{width:100%;min-height:56px;border:2px solid var(--mx);background:v
 "use strict";
 
 /* ---------- icons ---------- */
+/* Computers (not phones or tablets) get a Download button: save the file straight to a folder, e.g. for a DAW */
+const isDesktop = !(/android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (navigator.userAgentData && navigator.userAgentData.mobile) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+if (isDesktop) document.documentElement.classList.add("desktop");
 const IC = {
   play:'<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>',
   pause:'<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor"/></svg>',
   mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14"/><path d="M3 6l9 7 9-7"/></svg>',
+  save:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   pen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>'
 };
@@ -628,6 +638,12 @@ async function emailTake(t) {
   catch (e) { if (e.name !== "AbortError") downloadMail(t, wav); }
 }
 // No share menu at all (some computers): save the file and open a new email to attach it to
+// Download: the recording exactly as recorded (WAV stays WAV, M4A stays M4A), named by its title
+function downloadTake(t) {
+  const name = shareName(t) + "." + extOf(t.type || "");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(t.blob); a.download = name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
 async function downloadMail(t, file) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name;
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
@@ -822,7 +838,9 @@ function render() {
     p.querySelector(".s").textContent = fmt(t.dur);
     const mini = document.createElement("canvas"); mini.className = "mini"; mini.setAttribute("aria-hidden", "true");
     p.querySelector(".meta").append(mini);
-    r.append(p, btn("act", IC.pen + "Name", "Rename", () => renameTake(t)), btn("act", IC.mail + "Email", "Email to myself", () => emailTake(t)), btn("act", IC.trash + "Delete", "Delete", () => delTake(t)));
+    r.append(p, btn("act", IC.pen + "Name", "Rename", () => renameTake(t)), btn("act", IC.mail + "Email", "Email to myself", () => emailTake(t)));
+    if (isDesktop) r.append(btn("act", IC.save + "Download", "Download", () => downloadTake(t)));
+    r.append(btn("act", IC.trash + "Delete", "Delete", () => delTake(t)));
     rows.append(r);
   }
   // The take just made gets its own box with big buttons
@@ -850,6 +868,8 @@ $("binBtn").onclick = () => { binOpen = !binOpen; render(); };
 $("fPlay").onclick = () => { const t = takes.find(t => t.id === freshId); t && playTake(t); };
 $("fMail").onclick = () => { const t = takes.find(t => t.id === freshId); t && emailTake(t); };
 $("fDel").onclick = () => { const t = takes.find(t => t.id === freshId); t && delTake(t); };
+$("fSave").hidden = !isDesktop;
+$("fSave").onclick = () => { const t = takes.find(t => t.id === freshId); t && downloadTake(t); };
 
 /* ---------- install ----------
    Android Chrome offers its own install prompt, which a web page may only open from a tap, so a card with an

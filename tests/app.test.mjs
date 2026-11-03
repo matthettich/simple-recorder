@@ -30,7 +30,8 @@ async function test(name, fn) {
 }
 
 const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--autoplay-policy=no-user-gesture-required"] });
-const ctx = await browser.newContext({ viewport: { width: 375, height: 800 }, hasTouch: true, permissions: ["microphone"] });
+const ctx = await browser.newContext({ viewport: { width: 375, height: 800 }, hasTouch: true, permissions: ["microphone"],
+  userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36" });
 const page = await ctx.newPage();
 const errors = [];
 page.on("pageerror", e => errors.push(e.message));
@@ -226,6 +227,25 @@ await test("plays only the pressed recording unless Play the next is on", async 
   const second = await page.evaluate(() => live()[1].id);
   assert(id === second, "moved to the next take");
   await page.evaluate(() => { const s = JSON.parse(localStorage.getItem("simple-recorder-settings")); if (!s.autoplay) throw 0; });
+});
+
+await test("Download shows only on a computer, and saves the file as recorded", async () => {
+  assert(!(await page.isVisible("#fSave")), "no Download on a phone");
+  assert(await page.locator("#rows .row >> nth=0 >> [aria-label=Download]").count() === 0, "no row Download on a phone");
+  const desk = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ["microphone"], acceptDownloads: true });
+  const dp = await desk.newPage();
+  await dp.goto(URL0);
+  await dp.evaluate(() => { localStorage.setItem("simple-recorder-welcomed", "1"); localStorage.setItem("simple-recorder-settings", JSON.stringify({ format: "wav24", input: "auto" })); });
+  await dp.reload();
+  await dp.click("#recBtn"); await dp.waitForFunction(() => document.body.classList.contains("recording"));
+  await dp.waitForTimeout(1200); await dp.click("#recBtn");
+  await dp.waitForSelector("#fresh:not([hidden])");
+  assert(await dp.isVisible("#fSave"), "Download on a computer");
+  const [dl] = await Promise.all([dp.waitForEvent("download"), dp.click("#fSave")]);
+  assert(/\.wav$/.test(dl.suggestedFilename()), "file name " + dl.suggestedFilename());
+  console.log("       downloaded " + dl.suggestedFilename());
+  assert(await dp.locator("#rows .row >> nth=0 >> [aria-label=Download]").count() === 1, "row Download on a computer");
+  await desk.close();
 });
 
 await test("no page errors", async () => { assert(!errors.length, errors.join("; ")); });
