@@ -57,11 +57,15 @@ h1.brand span{background-image:linear-gradient(hsl(var(--h) var(--s) 81%),hsl(va
 
 /* Recorder */
 .rec{--l:90%;display:flex;flex-direction:column;align-items:center;padding:26px 14px 22px;gap:14px}
-.recbtn{width:150px;height:150px;border:3px solid var(--rule);background:var(--white);display:grid;place-items:center;
-  border-radius:50%;box-shadow:0 7px 0 var(--ink);transition:transform .08s}
-.recbtn:active{transform:translateY(4px);box-shadow:0 3px 0 var(--ink)}
-.recbtn i{display:block;width:62px;height:62px;border:3px solid var(--rule);background:#F27A9B;border-radius:50%;transition:all .15s}
-.recording .recbtn i{border-radius:0;width:54px;height:54px;background:var(--ink)}
+/* A tape-deck transport key: solid red record dot + REC; while recording it's a black key with a white stop square */
+.recbtn{width:min(260px,100%);height:110px;border:3px solid var(--rule);background:var(--white);color:var(--ink);
+  display:flex;align-items:center;justify-content:center;gap:18px;font-size:22px;font-weight:500;letter-spacing:.22em;
+  transition:background .12s,color .12s}
+.recbtn:active{background:hsl(var(--h) var(--s) 84%)}
+.recbtn i{flex:none;display:block;width:44px;height:44px;background:#D62828;border-radius:50%}
+.recbtn b{font:inherit;padding-left:.22em}
+.recording .recbtn{background:var(--ink);color:var(--white)}
+.recording .recbtn i{border-radius:0;width:36px;height:36px;background:var(--white)}
 .recbtn:disabled{opacity:.5}
 .clock{font-size:40px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:.02em;line-height:1}
 .say{font-size:17px;text-align:center;min-height:24px}
@@ -172,7 +176,7 @@ dialog .btns{justify-content:flex-end}
 
   <!-- Recorder -->
   <section class="box rec" id="rec">
-    <button class="recbtn" id="recBtn" type="button" aria-label="Start recording"><i></i></button>
+    <button class="recbtn" id="recBtn" type="button" aria-label="Start recording"><i></i><b id="recWord">REC</b></button>
     <div class="clock" id="clock">0:00</div>
     <div class="meter" aria-hidden="true"><i id="lvl"></i></div>
     <div class="say" id="say">Tap the button to record</div>
@@ -336,7 +340,7 @@ async function startRec() {
   rec.start(1000);
   t0 = Date.now();
   document.body.classList.add("recording");
-  $("recBtn").setAttribute("aria-label", "Stop recording");
+  $("recBtn").setAttribute("aria-label", "Stop recording"); $("recWord").textContent = "STOP";
   $("say").innerHTML = '<span class="dot"></span>Recording… tap to stop';
   $("fresh").hidden = true;
   tick = setInterval(() => $("clock").textContent = fmt((Date.now() - t0) / 1000), 250);
@@ -372,7 +376,7 @@ async function saveRec() {
   try { wake && wake.release(); } catch (e) {}
   rec = stream = actx = wake = null;
   document.body.classList.remove("recording");
-  $("recBtn").setAttribute("aria-label", "Start recording");
+  $("recBtn").setAttribute("aria-label", "Start recording"); $("recWord").textContent = "REC";
   $("lvl").style.width = "0";
   $("clock").textContent = "0:00";
   $("say").textContent = "Tap the button to record";
@@ -396,9 +400,12 @@ function fileOf(t) {
   return new File([t.blob], safe + "." + extOf(t.type), { type: t.type });
 }
 async function emailTake(t) {
-  const file = fileOf(t);
+  let file = fileOf(t);
+  const ok = f => navigator.canShare && navigator.canShare({ files: [f] });
+  // Android Chrome only shares audio with names it knows: .webm audio may need the .weba name
+  if (!ok(file) && /webm/.test(t.type)) file = new File([t.blob], file.name.replace(/\.webm$/, ".weba"), { type: "audio/webm" });
   const data = { files: [file], title: t.name, text: t.name + " (" + fmt(t.dur) + ")" };
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+  if (ok(file)) {
     try { await navigator.share(data); }
     catch (e) { if (e.name !== "AbortError") tell("Couldn't open the share menu. Try again."); }
     return;
