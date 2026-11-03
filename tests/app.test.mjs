@@ -12,7 +12,9 @@ catch { ({ chromium } = await import(process.env.PLAYWRIGHT_PATH || "/opt/npm-to
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".webmanifest": "application/manifest+json", ".png": "image/png", ".svg": "image/svg+xml" };
+let hang = false;   // when true the server never answers: a phone with one bar of signal
 const server = http.createServer((req, res) => {
+  if (hang) return;
   const p = decodeURIComponent(new URL(req.url, "http://x").pathname);
   const f = path.join(ROOT, p === "/" ? "index.html" : p);
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
@@ -45,6 +47,7 @@ await page.evaluate(() => {
 });
 
 async function record(ms) {
+  await page.waitForTimeout(450);   // REC is ignored for 0.4 s after STOP (double-tap guard)
   await page.click("#recBtn");
   await page.waitForFunction(() => document.body.classList.contains("recording"));
   await page.waitForTimeout(ms);
@@ -61,7 +64,9 @@ await test("welcome shows once", async () => {
   await page.evaluate(() => {
     window.__shared = null; window.__refuse = false;
     const OK = ["audio/x-m4a", "audio/webm", "audio/wav", "audio/ogg", "audio/mp3", "audio/mpeg", "audio/flac"];
-    navigator.canShare = d => !!(d && d.files);
+    // Like Android Chrome: canShare() already says no to a file type it won't share
+    const allowed = f => OK.includes(f.type) && !(window.__refuse && !/wav/.test(f.type));
+    navigator.canShare = d => !!(d && d.files) && allowed(d.files[0]);
     navigator.share = async d => {
       const f = d.files[0];
       if (!OK.includes(f.type) || (window.__refuse && !/wav/.test(f.type))) throw new DOMException("Permission denied", "NotAllowedError");
@@ -83,11 +88,13 @@ await test("records and saves a take", async () => {
 });
 
 await test("level meter moved during recording", async () => {
+  await page.waitForTimeout(450);
   await page.click("#recBtn");
   await page.waitForFunction(() => document.body.classList.contains("recording"));
   // the fake mic beeps once a second, so watch for the meter to move at any point
   const moved = await page.waitForFunction(() => parseFloat(document.getElementById("lvl").style.width) > 0, null, { timeout: 4000 }).then(() => true, () => false);
   assert(moved, "meter never moved");
+  await page.waitForTimeout(800);   // taps within 0.7 s of REC are ignored (double-tap guard)
   await page.click("#recBtn");
   await page.waitForFunction(() => !document.body.classList.contains("recording"));
   await page.waitForSelector("#fresh:not([hidden])");
@@ -186,9 +193,9 @@ await test("settings: WAV 24-bit records a real 24-bit WAV and emails it as WAV"
   assert((await page.textContent("#src")).startsWith("WAV · 24-bit"), "source line " + await page.textContent("#src"));
   await record(2000);
   const h = await page.evaluate(async () => {
-    const t = takes[0], b = new DataView(await t.blob.slice(0, 44).arrayBuffer());
-    const tag = String.fromCharCode(...new Uint8Array(await t.blob.slice(0, 4).arrayBuffer()));
-    return { tag, type: t.type, ch: b.getUint16(22, true), sr: b.getUint32(24, true), bits: b.getUint16(34, true), data: b.getUint32(40, true), size: t.blob.size, dur: t.dur };
+    const t = takes[0], blob = blobs.get(t.id), b = new DataView(await blob.slice(0, 44).arrayBuffer());
+    const tag = String.fromCharCode(...new Uint8Array(await blob.slice(0, 4).arrayBuffer()));
+    return { tag, type: t.type, ch: b.getUint16(22, true), sr: b.getUint32(24, true), bits: b.getUint16(34, true), data: b.getUint32(40, true), size: blob.size, dur: t.dur };
   });
   assert(h.tag === "RIFF" && h.type === "audio/wav" && h.bits === 24, "header " + JSON.stringify(h));
   assert(h.data === h.size - 44, "data length matches " + JSON.stringify(h));
@@ -208,7 +215,7 @@ await test("settings are kept", async () => {
   await page.click("#fmtList .opt >> text=WAV · 16-bit");
   await page.click("#setDone");
   await record(1200);
-  const bits = await page.evaluate(async () => new DataView(await takes[0].blob.slice(0, 44).arrayBuffer()).getUint16(34, true));
+  const bits = await page.evaluate(async () => new DataView(await blobs.get(takes[0].id).slice(0, 44).arrayBuffer()).getUint16(34, true));
   assert(bits === 16, "16-bit " + bits);
 });
 
@@ -246,6 +253,264 @@ await test("Download shows only on a computer, and saves the file as recorded", 
   console.log("       downloaded " + dl.suggestedFilename());
   assert(await dp.locator("#rows .row >> nth=0 >> [aria-label=Download]").count() === 1, "row Download on a computer");
   await desk.close();
+});
+
+/* ---------- robustness: each of these was a real bug ---------- */
+const waitIdle = () => page.waitForFunction(() => !session && !document.body.classList.contains("recording"), null, { timeout: 15000 });
+const useFormat = f => page.evaluate(f => { stopPlay(); settings.format = f; saveSettings(); showSource(); }, f);
+const noDialog = async () => { if (await page.isVisible("#askDlg")) throw new Error("unexpected dialog: " + await page.textContent("#askMsg")); };
+const liveCount = () => page.evaluate(() => live().length);
+
+await test("a double-tap on REC doesn't stop the take it just started", async () => {
+  await useFormat("m4a");
+  await page.waitForTimeout(450);
+  await page.evaluate(async () => { $("recBtn").click(); await new Promise(r => setTimeout(r, 180)); $("recBtn").click(); });
+  await page.waitForTimeout(1300);
+  assert(await page.evaluate(() => recording()), "still recording after a double-tap");
+  await page.click("#recBtn"); await waitIdle();
+  await noDialog();
+});
+
+for (const f of ["wav24", "m4a"]) await test(`STOP then REC straight away: the next take still records (${f})`, async () => {
+  await useFormat(f);
+  const before = await liveCount();
+  await page.waitForTimeout(450);
+  await page.click("#recBtn"); await page.waitForFunction(() => recording());
+  await page.waitForTimeout(1200);
+  // STOP, then keep tapping REC every 100 ms until a new take starts (the old app killed it and blamed the format)
+  await page.evaluate(async () => {
+    $("recBtn").click();
+    for (let i = 0; i < 60 && !recording(); i++) { await new Promise(r => setTimeout(r, 100)); if (!session || session.state !== "recording") $("recBtn").click(); }
+  });
+  assert(await page.evaluate(() => recording()), "second take recording");
+  await page.waitForTimeout(1500);
+  await noDialog();
+  await page.click("#recBtn"); await waitIdle();
+  await noDialog();
+  assert(await liveCount() === before + 2, "two new takes, got " + (await liveCount() - before));
+  const sizes = await page.evaluate(() => live().slice(0, 2).map(t => blobs.get(t.id).size));
+  assert(sizes.every(s => s > 1000), "both have sound " + sizes);
+});
+
+await test("the screen lock is let go even when STOP comes before the phone grants it", async () => {
+  await useFormat("m4a");
+  await page.evaluate(() => {
+    window.__lock = null;
+    Object.defineProperty(navigator, "wakeLock", { configurable: true, value: { request: () => new Promise(r => setTimeout(() => {
+      window.__lock = { released: false, release() { this.released = true; return Promise.resolve(); } }; r(window.__lock); }, 1500)) } });
+  });
+  await page.waitForTimeout(450);
+  await page.click("#recBtn"); await page.waitForFunction(() => recording());
+  await page.waitForTimeout(800);
+  await page.click("#recBtn"); await waitIdle();
+  await page.waitForFunction(() => window.__lock, null, { timeout: 4000 });
+  assert(await page.evaluate(() => window.__lock.released), "lock released");
+});
+
+await test("a mic that goes away mid-take (unplugged, a call) finishes and keeps the take (WAV)", async () => {
+  await useFormat("wav24");
+  const before = await liveCount();
+  await page.waitForTimeout(450);
+  await page.click("#recBtn"); await page.waitForFunction(() => recording());
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => session.stream.getAudioTracks()[0].dispatchEvent(new Event("ended")));
+  await waitIdle();
+  assert(await liveCount() === before + 1, "take kept");
+  await noDialog();
+});
+
+for (const f of ["wav16", "m4a"]) await test(`a take cut off by the app dying is rescued next time (${f})`, async () => {
+  await useFormat(f);
+  const before = await liveCount();
+  await page.waitForTimeout(450);
+  await page.click("#recBtn"); await page.waitForFunction(() => recording());
+  await page.waitForTimeout(3200);
+  // Simulate a crash: nothing gets to run on the way out
+  await page.evaluate(() => { session.stop = () => {}; });
+  await page.reload();
+  await page.waitForSelector("#askDlg[open]");
+  assert((await page.textContent("#askMsg")).includes("rescued"), "rescue message");
+  await page.click("#askYes");
+  await page.waitForFunction(n => live().length === n + 1, before);
+  const r = await page.evaluate(async () => {
+    const t = live()[0], b = blobs.get(t.id), a = document.getElementById("audio");
+    const d = await new Promise(res => { a.onloadedmetadata = () => res(a.duration); a.onerror = () => res(-1); playTake(t); });
+    stopPlay();
+    return { name: t.name, size: b.size, type: t.type, d, pending: (await getAll(PEND)).length, parts: (await getAll(PARTS)).length };
+  });
+  assert(/rescued/.test(r.name), "name " + r.name);
+  assert(r.pending === 0 && r.parts === 0, "leftovers cleared " + JSON.stringify(r));
+  assert(r.d === Infinity || r.d > 1.5, "playable with sound " + JSON.stringify(r));
+  console.log("       " + JSON.stringify(r));
+});
+
+await test("a take the phone can't store goes to Downloads instead of being lost", async () => {
+  await useFormat("m4a");
+  await page.evaluate(() => {
+    window.__put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (v, k) { if (this.name === "audio") throw new DOMException("Quota exceeded", "QuotaExceededError"); return window.__put.call(this, v, k); };
+  });
+  await page.waitForTimeout(450);
+  await page.click("#recBtn"); await page.waitForFunction(() => recording());
+  await page.waitForTimeout(1200);
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#recBtn")]);
+  await page.waitForSelector("#askDlg[open]");
+  assert((await page.textContent("#askMsg")).includes("Downloads"), "says where it went");
+  assert(/\.(weba|webm|m4a)$/.test(dl.suggestedFilename()), "file " + dl.suggestedFilename());
+  await page.click("#askYes");
+  await page.evaluate(() => { IDBObjectStore.prototype.put = window.__put; });
+});
+
+await test("Bluetooth earbuds are never taken for a USB mic", async () => {
+  const r = await page.evaluate(() => ["Bluetooth headset", "Galaxy Buds2 Pro (Bluetooth)", "Hands-Free BT", "USB-Audio - AT2020USB+", "Blue Yeti", "Scarlett 2i2 USB", "Headset earpiece"]
+    .map(l => [l, isUsbMic({ label: l, deviceId: "x" })]));
+  const want = [false, false, false, true, true, true, false];
+  assert(r.every(([, v], i) => v === want[i]), JSON.stringify(r));
+});
+
+await test("deleting for good while its waveform is being made doesn't bring it back", async () => {
+  const back = await page.evaluate(async () => {
+    const t = live()[0];
+    await setDeleted(t, Date.now()); render();
+    await new Promise(r => setTimeout(r, 300));
+    t.peaks = null; t.peakFail = false;
+    const orig = decode; window.decode = async (b, r) => { await new Promise(x => setTimeout(x, 800)); return orig(b, r); };
+    fillPeaks();
+    await new Promise(r => setTimeout(r, 100));
+    await killTake(t.id); takes = takes.filter(x => x !== t); blobs.delete(t.id);
+    await new Promise(r => setTimeout(r, 1500));
+    window.decode = orig;
+    return (await getAll(META)).some(x => x.id === t.id) || (await getAll(AUDIO)).some(x => x.id === t.id);
+  });
+  assert(!back, "it came back");
+});
+
+await test("an expired tap gets one more tap and sends the same file, not a WAV", async () => {
+  await page.evaluate(() => {
+    window.__shared = null; let n = 0;
+    navigator.canShare = d => !!(d && d.files);
+    navigator.share = async d => { if (n++ === 0) throw new DOMException("Must be handling a user gesture", "NotAllowedError"); window.__shared = { type: d.files[0].type, name: d.files[0].name }; };
+  });
+  const t = await page.evaluate(() => { const t = live().find(t => !/wav/.test(t.type)); return t && t.id; });
+  assert(t, "need a compressed take");
+  await page.evaluate(id => { emailTake(takes.find(t => t.id === id)); }, t);
+  await page.waitForSelector("#askDlg[open]");
+  assert((await page.textContent("#askMsg")).includes("ready to email"), "asks for a tap");
+  await page.click("#askYes");
+  await page.waitForFunction(() => window.__shared);
+  const s = await page.evaluate(() => window.__shared);
+  assert(!/wav/.test(s.type), "same kind of file " + JSON.stringify(s));
+  assert(await page.evaluate(() => localStorage.getItem("simple-recorder-share-wav") === null), "nothing sticks");
+});
+
+await test("emailing a take clears its 'not emailed yet' mark", async () => {
+  const r = await page.evaluate(async () => {
+    const t = live().find(t => !t.sent); if (!t) return "none";
+    navigator.share = async () => {};
+    const row = () => document.querySelector(`#rows .row[data-id="${t.id}"] .s`).textContent;
+    const before = row(); await emailTake(t); const after = row();
+    return { before, after, saved: (await getAll(META)).find(x => x.id === t.id).sent > 0 };
+  });
+  assert(r.before.includes("not emailed") && !r.after.includes("not emailed") && r.saved, JSON.stringify(r));
+});
+
+await test("dialogs wait their turn instead of breaking each other", async () => {
+  await page.evaluate(() => { window.__d = []; tell("first").then(v => __d.push(["first", v])); tell("second").then(v => __d.push(["second", v])); });
+  await page.waitForSelector("#askDlg[open]");
+  assert((await page.textContent("#askMsg")) === "first", "first shows first");
+  await page.click("#askYes");
+  await page.waitForFunction(() => document.getElementById("askDlg").open && $("askMsg").textContent === "second");
+  await page.click("#askYes");
+  await page.waitForFunction(() => __d.length === 2);
+  assert(JSON.stringify(await page.evaluate(() => __d)) === '[["first",true],["second",true]]', "both answered");
+});
+
+await test("undo brings back several deletes, and the just-recorded box", async () => {
+  await useFormat("m4a");
+  await record(1200);
+  const n = await liveCount();
+  await page.click("#fDel");
+  await page.click("#rows .row >> nth=0 >> [aria-label=Delete]");
+  await page.waitForFunction(k => live().length === k - 2, n);
+  assert((await page.textContent("#undoMsg")).startsWith("2 "), "says two");
+  await page.click("#undoBtn");
+  await page.waitForFunction(k => live().length === k, n);
+  assert(await page.isVisible("#fresh"), "just-recorded box back");
+});
+
+await test("tapping the big waveform plays from that point", async () => {
+  await page.click("#freshWave", { position: { x: 200, y: 50 } });
+  await page.waitForFunction(() => !document.getElementById("audio").paused && cur && cur.id === freshId);
+  await page.evaluate(() => stopPlay());
+});
+
+await test("the compressed format is labelled with what the phone really makes", async () => {
+  const r = await page.evaluate(() => ({ type: pickType(), label: FORMATS.m4a.label }));
+  assert(/mp4a/.test(r.type) === /AAC/.test(r.label) && (/webm/.test(r.type) ? /WebM/.test(r.label) : true), JSON.stringify(r));
+  console.log("       " + JSON.stringify(r));
+});
+
+await test("two takes with the same name get different file names", async () => {
+  const names = await page.evaluate(async () => {
+    const L = live().slice(0, 2);
+    for (const t of L) { await updateMeta(t.id, { name: "Song" }); t.name = "Song"; }
+    return L.map(t => shareName(t)).sort();
+  });
+  assert(names[0] === "Song" && names[1] === "Song (2)", JSON.stringify(names));
+});
+
+await test("recordings made before this update are moved over and still play", async () => {
+  const c2 = await browser.newContext({ viewport: { width: 375, height: 800 }, permissions: ["microphone"] });
+  const p2 = await c2.newPage();
+  await p2.goto(URL0 + "manifest.webmanifest");
+  await p2.evaluate(() => new Promise((res, rej) => {
+    // the old layout: version 1, the sound inside each take
+    const sr = 8000, n = sr, b = new DataView(new ArrayBuffer(44 + n * 2));
+    const S = (o, s) => { for (let i = 0; i < s.length; i++) b.setUint8(o + i, s.charCodeAt(i)); };
+    S(0, "RIFF"); b.setUint32(4, 36 + n * 2, true); S(8, "WAVE"); S(12, "fmt "); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, sr, true); b.setUint32(28, sr * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); S(36, "data"); b.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) b.setInt16(44 + i * 2, Math.round(Math.sin(i / 8) * 8000), true);
+    const r = indexedDB.open("simple-recorder", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("takes", { keyPath: "id" });
+    r.onsuccess = () => { const t = r.result.transaction("takes", "readwrite");
+      t.objectStore("takes").put({ id: "old1", created: Date.now() - 1000, name: "Old song", dur: 1, type: "audio/wav", blob: new Blob([b], { type: "audio/wav" }), deleted: 0, noPeaks: true });
+      t.oncomplete = () => { r.result.close(); res(); }; t.onerror = () => rej(t.error); };
+  }));
+  await p2.goto(URL0);
+  await p2.waitForSelector("#rows .row");
+  const r = await p2.evaluate(async () => {
+    const meta = (await getAll(META))[0];
+    return { name: live()[0].name, hasBlob: blobs.get("old1") && blobs.get("old1").size, blobInMeta: "blob" in meta, peaks: !!(await new Promise(r => setTimeout(r, 800)), live()[0].peaks) };
+  });
+  assert(r.name === "Old song" && r.hasBlob > 44 && !r.blobInMeta, JSON.stringify(r));
+  assert(r.peaks, "waveform made (old noPeaks flag dropped) " + JSON.stringify(r));
+  await c2.close();
+});
+
+await test("renaming doesn't rewrite the sound", async () => {
+  const r = await page.evaluate(async () => {
+    let wrote = false; const orig = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (v, k) { if (this.name === "audio") wrote = true; return orig.call(this, v, k); };
+    await updateMeta(live()[0].id, { name: "Renamed" });
+    IDBObjectStore.prototype.put = orig;
+    return wrote;
+  });
+  assert(!r, "audio store was written");
+});
+
+await test("with a dead connection the app still opens, from the copy on the phone", async () => {
+  const c3 = await browser.newContext({ viewport: { width: 375, height: 800 }, permissions: ["microphone"] });
+  const p3 = await c3.newPage();
+  await p3.goto(URL0);
+  await p3.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 15000 });
+  hang = true;
+  const t0 = Date.now();
+  try { await p3.reload({ timeout: 9000 }); await p3.waitForSelector("#recBtn", { timeout: 2000 }); }
+  finally { hang = false; }
+  const ms = Date.now() - t0;
+  assert(ms < 5000, "opened in " + ms + " ms");
+  console.log("       opened offline in " + ms + " ms");
+  await c3.close();
 });
 
 await test("no page errors", async () => { assert(!errors.length, errors.join("; ")); });

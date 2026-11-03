@@ -13,7 +13,20 @@ Open it at **https://matthettich.github.io/simple-recorder/**
 - **Listen:** tap any recording; it plays just that one. Settings → *Play the next recording* carries on down the list.
 - **Rename:** tap **Name**.
 
-Recordings stay on the phone (in the browser's storage). Emailing a take is the way to keep a copy somewhere else.
+Recordings stay on the phone (in the browser's storage). Emailing a take is the way to keep a copy somewhere else;
+takes that haven't been emailed yet say so in the list. If the browser won't promise to keep its storage, the note at
+the bottom of the page says so.
+
+## Safety nets
+
+- **Nothing is lost if the app dies mid-take.** The sound is saved to the phone every second while recording. If the app
+  is closed, crashes or the battery dies, the take is put back together the next time the app opens, marked *(rescued)*.
+- **If the phone can't store a take** (out of space), it goes to Downloads instead.
+- **Taps:** a double-tap on REC or STOP counts as one tap.
+- **Mic:** Automatic uses a USB mic when one is plugged in, never Bluetooth earbuds. If the mic goes away mid-take
+  (unplugged, a phone call), the take stops and is kept.
+- **WAV:** a mic that's really mono (most phone mics) is saved as mono, so files are half the size.
+- **Email:** if the phone won't share the file type, a WAV is made instead, decided fresh each time.
 
 ## Install it
 
@@ -39,3 +52,6 @@ A phone-sized Chromium with a fake microphone:
 npm i -D playwright && npx playwright install chromium   # once
 node tests/app.test.mjs
 ```
+
+The tests cover the failure paths too: double taps, STOP-then-REC, a crash mid-take, a full phone, a mic that goes away,
+share refusals, a dead network, and moving recordings from the old storage layout.
