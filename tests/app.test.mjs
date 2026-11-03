@@ -52,6 +52,18 @@ async function record(ms) {
   await page.waitForSelector("#fresh:not([hidden])");
 }
 
+await test("welcome shows once", async () => {
+  assert(await page.isVisible("#welcome"), "welcome open");
+  await page.click("#welOk");
+  await page.reload();
+  assert(!(await page.isVisible("#welcome")), "not shown again");
+  await page.evaluate(() => {
+    window.__shared = null;
+    navigator.canShare = d => !!(d && d.files);
+    navigator.share = async d => { window.__shared = { n: d.files.length, name: d.files[0].name, type: d.files[0].type, size: d.files[0].size, title: d.title }; };
+  });
+});
+
 await test("starts empty", async () => {
   assert(await page.isVisible("text=No recordings yet"), "empty message");
 });

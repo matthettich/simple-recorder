@@ -6,12 +6,12 @@ Open it at **https://matthettich.github.io/simple-recorder/**
 
 ## Using it
 
-- **Record:** tap the big round button. Tap it again to stop. The take is saved straight away.
-- **Email:** tap Email, then pick Gmail (or Mail). A new email opens with the recording attached.
+- **Record:** press **REC**. Press **STOP** when done. The take is saved straight away.
+- **Email:** tap *Email to myself*, then pick Gmail (or Mail). A new email opens with the recording attached.
 - **Delete:** tap the bin. Tap **Undo** at the bottom if it was a mistake. Deleted takes also sit under
   *Recently deleted* for 30 days, where they can be restored.
 - **Listen:** tap any recording. When it finishes, the next one plays.
-- **Rename:** tap the pencil.
+- **Rename:** tap **Name**.
 
 Recordings stay on the phone (in the browser's storage). Emailing a take is the way to keep a copy somewhere else.
 
@@ -19,6 +19,12 @@ Recordings stay on the phone (in the browser's storage). Emailing a take is the 
 
 **Android:** open the link in Chrome. A card at the top offers **Install app**; tap it.
 **iPhone:** open the link in Safari, tap Share, then **Add to Home Screen**.
+
+## Later ideas
+
+- **Email without the share menu:** a small Google Apps Script could send each take straight to his inbox,
+  with his address already filled in, so Email is one tap. For now the share menu opens Gmail with the file attached.
+- A playlist view with shuffle/repeat, and multitrack recording.
 
 ## Updating the app
 
