@@ -13,8 +13,10 @@ catch { ({ chromium } = await import(process.env.PLAYWRIGHT_PATH || "/opt/npm-to
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".webmanifest": "application/manifest+json", ".png": "image/png", ".svg": "image/svg+xml" };
 let hang = false;   // when true the server never answers: a phone with one bar of signal
+let broken = false; // when true the server answers every request with a 503: the host is having a bad day
 const server = http.createServer((req, res) => {
   if (hang) return;
+  if (broken) { res.writeHead(503); return res.end("down"); }
   const p = decodeURIComponent(new URL(req.url, "http://x").pathname);
   const f = path.join(ROOT, p === "/" ? "index.html" : p);
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
@@ -350,15 +352,19 @@ await test("a take the phone can't store goes to Downloads instead of being lost
     window.__put = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function (v, k) { if (this.name === "audio") throw new DOMException("Quota exceeded", "QuotaExceededError"); return window.__put.call(this, v, k); };
   });
-  await page.waitForTimeout(450);
-  await page.click("#recBtn"); await page.waitForFunction(() => recording());
-  await page.waitForTimeout(1200);
-  const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#recBtn")]);
-  await page.waitForSelector("#askDlg[open]");
-  assert((await page.textContent("#askMsg")).includes("Downloads"), "says where it went");
-  assert(/\.(weba|webm|m4a)$/.test(dl.suggestedFilename()), "file " + dl.suggestedFilename());
-  await page.click("#askYes");
-  await page.evaluate(() => { IDBObjectStore.prototype.put = window.__put; });
+  try {
+    await page.waitForTimeout(450);
+    await page.click("#recBtn"); await page.waitForFunction(() => recording());
+    await page.waitForTimeout(1200);
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#recBtn")]);
+    await page.waitForSelector("#askDlg[open]");
+    assert((await page.textContent("#askMsg")).includes("Downloads"), "says where it went");
+    assert(/\.(weba|webm|m4a)$/.test(dl.suggestedFilename()), "file " + dl.suggestedFilename());
+    await page.click("#askYes");
+  } finally {
+    // Put storage back even if a step above failed, so the later tests aren't broken by this one
+    await page.evaluate(() => { if (window.__put) IDBObjectStore.prototype.put = window.__put; });
+  }
 });
 
 await test("Bluetooth earbuds are never taken for a USB mic", async () => {
@@ -491,8 +497,8 @@ await test("renaming doesn't rewrite the sound", async () => {
   const r = await page.evaluate(async () => {
     let wrote = false; const orig = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function (v, k) { if (this.name === "audio") wrote = true; return orig.call(this, v, k); };
-    await updateMeta(live()[0].id, { name: "Renamed" });
-    IDBObjectStore.prototype.put = orig;
+    try { await updateMeta(live()[0].id, { name: "Renamed" }); }
+    finally { IDBObjectStore.prototype.put = orig; }
     return wrote;
   });
   assert(!r, "audio store was written");
@@ -511,6 +517,49 @@ await test("with a dead connection the app still opens, from the copy on the pho
   assert(ms < 5000, "opened in " + ms + " ms");
   console.log("       opened offline in " + ms + " ms");
   await c3.close();
+});
+
+await test("a server error opens the copy on the phone, not an error page", async () => {
+  const c4 = await browser.newContext({ viewport: { width: 375, height: 800 }, permissions: ["microphone"] });
+  const p4 = await c4.newPage();
+  await p4.goto(URL0);
+  await p4.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 15000 });
+  broken = true;
+  try { await p4.reload({ timeout: 9000 }); await p4.waitForSelector("#recBtn", { timeout: 2000 }); }
+  finally { broken = false; }
+  await c4.close();
+});
+
+await test("updating clears only this app's old caches, never another app's", async () => {
+  const c5 = await browser.newContext({ viewport: { width: 375, height: 800 }, permissions: ["microphone"] });
+  const p5 = await c5.newPage();
+  await p5.goto(URL0);
+  await p5.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 15000 });
+  // An old version of this app's cache and another app's cache on the same site, then a fresh worker activates
+  await p5.evaluate(async () => {
+    await (await caches.open("simple-recorder-v1")).put("/old", new Response("old"));
+    await (await caches.open("daily-meds-v7")).put("/x", new Response("keep me"));
+    const reg = await navigator.serviceWorker.getRegistration();
+    await reg.unregister();
+    await navigator.serviceWorker.register("sw.js");
+    await navigator.serviceWorker.ready;
+  });
+  await p5.waitForFunction(async () => !(await caches.keys()).includes("simple-recorder-v1"), null, { timeout: 10000, polling: 200 });
+  const keys = await p5.evaluate(() => caches.keys());
+  assert(keys.includes("daily-meds-v7"), "other app's cache kept " + keys);
+  assert(keys.some(k => /^simple-recorder-v\d+$/.test(k)), "own cache present " + keys);
+  await c5.close();
+});
+
+await test("storage reconnects after the browser closes the database", async () => {
+  const r = await page.evaluate(async () => {
+    const d = await db();
+    d.close(); d.dispatchEvent(new Event("close"));   // what the browser does when it drops the connection
+    const fresh = await db();
+    const n = (await getAll(META)).length;
+    return { reopened: fresh !== d, n };
+  });
+  assert(r.reopened && r.n >= 0, JSON.stringify(r));
 });
 
 await test("no page errors", async () => { assert(!errors.length, errors.join("; ")); });

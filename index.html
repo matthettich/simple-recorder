@@ -362,7 +362,8 @@ const tell = (msg, title) => ask(msg, { cancel: null, title });
 const DB_NAME = "simple-recorder", META = "takes", AUDIO = "audio", PEND = "pending", PARTS = "parts";
 let dbp = null;
 function db() {
-  if (!dbp) dbp = new Promise((res, rej) => {
+  if (dbp) return dbp;
+  const p = dbp = new Promise((res, rej) => {
     const r = indexedDB.open(DB_NAME, 2);
     r.onupgradeneeded = e => {
       const d = r.result, t = r.transaction;
@@ -382,7 +383,14 @@ function db() {
         }
       }
     };
-    r.onsuccess = () => { const d = r.result; d.onversionchange = () => d.close(); res(d); };
+    r.onsuccess = () => {
+      const d = r.result;
+      // If the connection closes (a newer version opened elsewhere, or the browser closed it), forget it so the next call reopens.
+      const drop = () => { if (dbp === p) dbp = null; };
+      d.onversionchange = () => { d.close(); drop(); };
+      d.onclose = drop;
+      res(d);
+    };
     r.onerror = () => { dbp = null; rej(r.error); };
   });
   return dbp;
@@ -1071,8 +1079,16 @@ function drawAll() {
   });
 }
 let waveRaf = 0;
-function waveLoop() { drawAll(); waveRaf = (cur && !audio.paused) ? requestAnimationFrame(waveLoop) : 0; }
-function startWaveLoop() { if (!waveRaf) waveLoop(); }
+// While playing, only the playing take's progress moves, so redraw just that one (its row and the fresh card).
+function drawPlaying() {
+  if (!cur) return;
+  const t = takes.find(x => x.id === cur.id); if (!t) return;
+  if (t.id === freshId && !$("fresh").hidden) drawWave($("freshWave"), t.peaks, progOf(t));
+  const r = document.querySelector(`#rows .row[data-id="${CSS.escape(t.id)}"]`), cv = r && r.querySelector(".mini");
+  if (cv) drawWave(cv, t.peaks, progOf(t));
+}
+function waveLoop() { drawPlaying(); waveRaf = (cur && !audio.paused) ? requestAnimationFrame(waveLoop) : 0; }
+function startWaveLoop() { if (!waveRaf) { drawAll(); waveLoop(); } }   // one full redraw clears any previous take's progress line
 window.addEventListener("resize", drawAll);
 // Tap the big waveform to play from that point (a tap, not a scroll that happens to start on it)
 $("freshWave").addEventListener("click", e => {
