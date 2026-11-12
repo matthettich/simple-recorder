@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#FF4D00"/>
+  <g stroke="#141414" stroke-width="12" stroke-linejoin="round" stroke-linecap="round">
+    <!-- deck -->
+    <rect x="56" y="104" width="400" height="304" fill="none" stroke-width="14"/>
+    <!-- tape running between the reels, past the heads -->
+    <path d="M118 236 L180 352 L332 352 L394 236" fill="none" stroke-width="8"/>
+    <rect x="216" y="340" width="80" height="34" fill="#E9E8E3"/>
+    <!-- reels -->
+    <circle cx="170" cy="216" r="84" fill="#141414"/>
+    <circle cx="342" cy="216" r="84" fill="#141414"/>
+    <g fill="#FF4D00">
+      <circle cx="170" cy="168" r="18"/><circle cx="128" cy="240" r="18"/><circle cx="212" cy="240" r="18"/>
+      <circle cx="342" cy="168" r="18"/><circle cx="300" cy="240" r="18"/><circle cx="384" cy="240" r="18"/>
+    </g>
+    <circle cx="170" cy="216" r="14" fill="#E9E8E3"/>
+    <circle cx="342" cy="216" r="14" fill="#E9E8E3"/>
+  </g>
+</svg>

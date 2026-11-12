@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recorder beta</title>
+<meta name="theme-color" content="#E9E8E3">
+<meta name="color-scheme" content="only light">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Recorder">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="./icon.svg?v=4" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.png?v=4">
+<link rel="preload" href="fonts/InterDisplay-Bold.woff" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="fonts/Inter-Regular.woff" as="font" type="font/woff" crossorigin>
+<style>
+/* Thunder Plus's IDM skin: warm grey paper, black ink, bold uppercase titles,
+   hazard orange for record and playing, blue for the main action (Thunder's EDIT key) */
+@font-face{font-family:Inter; src:url(fonts/Inter-Regular.woff) format("woff"); font-weight:400; font-display:swap}
+@font-face{font-family:Inter; src:url(fonts/Inter-SemiBold.woff) format("woff"); font-weight:500 600; font-display:swap}
+@font-face{font-family:"Inter Display"; src:url(fonts/InterDisplay-Bold.woff) format("woff"); font-weight:700 900; font-display:swap}
+@font-face{font-family:"JetBrains Mono"; src:url(fonts/JetBrainsMono-400.woff2) format("woff2"); font-weight:400 500; font-display:swap}
+:root{
+  --mx:#141414; --mx2:#505050; --mxdim:#bdbcb6; --mxbg:#e9e8e3; --mxpanel:#f2f1ec; --mxpanel2:#dddcd5; --mxon:#ffffff;
+  --orange:#ff4d00; --blue:#2a6cff;
+  /* Inter for reading and the big type (a Swiss grotesk, like Braun/TE); JetBrains Mono, as in Thunder Plus, for small readouts */
+  --font:Inter,"Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;
+  --display:"Inter Display",Inter,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:only light;
+}
+*,*::before,*::after{box-sizing:inherit;border-radius:0}
+body{margin:0;min-height:100vh;color:var(--mx);background:var(--mxbg);font-family:var(--font);
+  font-size:19px;line-height:1.4;-webkit-tap-highlight-color:transparent;font-feature-settings:"cv11","ss01"}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--mx);outline-offset:2px}
+[hidden]{display:none!important}
+
+.wrap{max-width:560px;margin:0 auto;padding:16px 14px 150px}
+h1.brand{margin:6px 0 16px;font-family:var(--display);font-size:26px;line-height:1.1;font-weight:800;text-transform:uppercase;letter-spacing:.02em;display:flex;align-items:center;gap:10px}
+h1.brand::before{content:"";width:16px;height:16px;border-radius:50%;background:var(--orange);flex:none}
+
+/* Panels: paper panel, grey title strip, 2px ink frame */
+.box{border:2px solid var(--mx);margin-top:14px;background:var(--mxpanel)}
+.lid{display:flex;align-items:center;gap:8px;min-height:48px;padding:0 0 0 12px;background:var(--mxpanel2);color:var(--mx);
+  border-bottom:2px solid var(--mx);font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.1em}
+.lid h2{margin:0;font:inherit}
+.lid .st{margin-left:auto;font-family:var(--mono);font-size:15px;padding-right:12px;font-variant-numeric:tabular-nums;color:var(--mx2);font-weight:400;letter-spacing:0;text-transform:none}
+
+/* Recorder: the tape-deck key. REC: orange dot; recording: the key lights orange with a black stop square */
+.rec{display:flex;flex-direction:column;align-items:center;padding:26px 14px 22px;gap:16px;background:var(--mxpanel)}
+.recbtn{width:min(270px,100%);height:120px;border:2px solid var(--mx);background:var(--mxbg);color:var(--mx);
+  display:flex;align-items:center;justify-content:center;gap:20px;font-family:var(--display);font-size:28px;font-weight:800;letter-spacing:.16em;
+  box-shadow:inset 0 -6px 0 var(--mxpanel2);transition:background .1s}
+.recbtn:active{background:var(--mxpanel2);box-shadow:none}
+.recbtn i{flex:none;display:block;width:44px;height:44px;background:var(--orange);border-radius:50%;border:2px solid var(--mx)}
+.recbtn b{font:inherit;padding-left:.2em}
+.recording .recbtn{background:var(--orange);color:var(--mx);box-shadow:none}
+.recording .recbtn i{border-radius:0;width:36px;height:36px;background:var(--mx)}
+.recbtn:disabled{opacity:.5}
+.clock{font-family:var(--display);font-size:60px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1}
+.say{font-size:18px;text-align:center;min-height:26px;color:var(--mx2)}
+.recording .say{color:var(--mx)}
+.meter{position:relative;width:100%;max-width:340px;height:16px;border:2px solid var(--mx);background:var(--mxbg)}
+.meter b{position:absolute;top:0;bottom:0;left:0;width:3px;background:var(--mx);display:none}
+.recording .meter b{display:block}
+.meter.clip{box-shadow:0 0 0 3px var(--orange)}
+.meter i{display:block;height:100%;width:0;background:var(--mx)}
+.meter i.hot{background:var(--orange)}
+.recording .dot{display:inline-block;width:12px;height:12px;background:var(--orange);border-radius:50%;margin-right:8px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* Just recorded: Email (blue) across the top, Listen and Delete under it */
+.fresh .body{padding:14px}
+.fresh .nm{font-size:20px;font-weight:600;margin:0 0 12px}
+.fbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fbtns .go{grid-column:1/-1;order:-1;flex-direction:row;gap:14px;font-size:20px}
+/* On a computer: Listen · Download · Delete under Email */
+.desktop .fbtns{grid-template-columns:1fr 1fr 1fr}
+.desktop #fSave{order:0}
+.desktop #fDel{order:1}
+.bigbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:88px;border:2px solid var(--mx);
+  background:var(--mxbg);font-weight:600;font-size:18px;padding:8px 4px}
+.bigbtn svg{width:30px;height:30px}
+.bigbtn.go{background:var(--blue);color:var(--mxon)}
+.bigbtn:active{background:var(--mx);color:var(--mxon)}
+
+/* Recording list */
+.row{display:flex;flex-wrap:wrap;align-items:stretch;border-top:2px solid var(--mx);background:transparent}
+.row .play{flex:1 1 100%}
+.lid + .row,.lid + div > .row:first-child{border-top:0}
+.row.on{background:var(--mxbg)}
+.meta .s em{font-style:normal;color:var(--mx);font-weight:600;font-family:var(--font)}
+.play{flex:1;min-width:0;display:flex;align-items:center;gap:12px;border:0;background:transparent;text-align:left;padding:12px;min-height:76px}
+.pbox{flex:none;width:46px;height:46px;border:2px solid var(--mx);background:var(--mxbg);display:grid;place-items:center}
+.row.on .pbox{background:var(--orange);color:var(--mx)}
+.pbox svg{width:18px;height:18px}
+.meta{flex:1;min-width:0}
+.meta .t{display:block;font-weight:600;overflow-wrap:anywhere;line-height:1.25}
+.meta .s{display:block;font-family:var(--mono);font-size:15px;color:var(--mx2);font-variant-numeric:tabular-nums}
+.act{flex:1 1 0;min-height:52px;border:0;border-top:1px solid var(--mxdim);background:transparent;display:flex;align-items:center;justify-content:center;
+  gap:8px;color:var(--mx);font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;padding:6px 4px}
+.act+.act{border-left:1px solid var(--mxdim)}
+.act svg{width:20px;height:20px}
+.act:active{background:var(--mx);color:var(--mxon)}
+.empty{padding:16px 12px;color:var(--mx2);font-size:18px}
+
+.textbtn{border:0;background:none;padding:14px 2px;text-decoration:underline;text-underline-offset:4px;font-size:16px;color:var(--mx2)}
+.bin .row .meta .t{color:var(--mx2)}
+.bin .row{flex-wrap:nowrap;border-top:1px solid var(--mxdim)}
+.bin .row .play{flex:1 1 auto}
+.small{flex:none;border:0;border-left:1px solid var(--mxdim);background:transparent;padding:0 14px;font-size:15px;font-weight:600;text-transform:uppercase}
+
+/* Player strip along the bottom */
+.player{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--mxpanel2);border-top:2px solid var(--mx);
+  padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px))}
+.player .in{max-width:560px;margin:0 auto}
+.player .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:17px}
+.ctrl{display:flex;align-items:center;gap:10px;margin-top:8px}
+.ctrl button{flex:none;width:58px;height:58px;border:2px solid var(--mx);background:var(--mxbg);display:grid;place-items:center}
+.ctrl button.main{background:var(--mx);color:var(--mxon)}
+body.playing:not(.paused) .ctrl button.main{background:var(--orange);color:var(--mx)}
+.ctrl svg{width:22px;height:22px}
+.ctrl .tm{font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums;min-width:48px;text-align:center}
+input[type=range]{flex:1;min-width:0;accent-color:var(--mx);height:32px}
+
+/* Undo bar */
+.undo{position:fixed;left:12px;right:12px;bottom:16px;z-index:20;display:flex;align-items:center;gap:10px;max-width:480px;margin:0 auto;
+  padding:0 0 0 14px;border:2px solid var(--mx);background:var(--mxpanel);color:var(--mx);box-shadow:6px 6px 0 var(--mx)}
+.undo span{flex:1;min-width:0;padding:12px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.undo button{flex:none;min-height:56px;padding:0 22px;border:0;border-left:2px solid var(--mx);background:var(--orange);color:var(--mx);font-weight:600;font-size:18px;text-transform:uppercase;letter-spacing:.1em}
+body.playing .undo{bottom:calc(160px + env(safe-area-inset-bottom,0px))}
+
+/* Install card */
+.inst .body{padding:14px 14px 16px}
+.inst p{margin:0 0 12px}
+.inst ol{margin:0 0 12px;padding-left:24px}
+.inst li{margin:4px 0}
+.btns{display:flex;gap:10px;flex-wrap:wrap}
+.primary,.ghost,.danger{border:2px solid var(--mx);padding:12px 20px;min-height:58px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:16px}
+.primary{background:var(--blue);color:var(--mxon)}
+.ghost{background:var(--mxbg);color:var(--mx)}
+.danger{background:var(--orange);color:var(--mx)}
+
+dialog{border:2px solid var(--mx);padding:0;width:min(480px,calc(100vw - 24px));background:var(--mxpanel);color:var(--mx);box-shadow:8px 8px 0 var(--mx)}
+dialog::backdrop{background:rgba(233,232,227,.85)}
+dialog h3{margin:0;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;border-bottom:2px solid var(--mx);padding:13px 14px;background:var(--mxpanel2)}
+dialog .body{padding:16px}
+dialog ol{margin:0 0 16px;padding-left:26px}
+dialog li{margin:8px 0}
+dialog p{margin:0 0 14px;white-space:pre-line}
+dialog input[type=text]{width:100%;border:2px solid var(--mx);padding:12px;font-size:20px;margin-bottom:14px;background:var(--mxbg)}
+dialog .btns{justify-content:flex-end}
+
+.updb{display:block;width:calc(100% - 6px);margin:0 0 18px;
+  font-size:17px;font-weight:600;text-align:center;padding:16px 22px;background:var(--orange);color:var(--mx);border:2px solid var(--mx);box-shadow:6px 6px 0 var(--mx)}
+.fine{font-size:15px;color:var(--mx2);margin:22px 2px 0}
+.sending{opacity:.6;pointer-events:none}
+/* Header + settings */
+/* Title on the left, the gear on the right */
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 16px}
+header.top h1.brand{margin:0;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis;display:block;font-size:clamp(20px,7vw,26px)}
+.setbtn{display:grid;place-items:center;width:48px;height:48px;border:2px solid var(--mx);background:var(--mxpanel);padding:0}
+.setbtn svg{width:28px;height:28px}
+.setbtn:active{background:var(--mx);color:var(--mxon)}
+.src{border:1px solid var(--mxdim);background:transparent;color:var(--mx2);font-family:var(--mono);font-size:13px;padding:6px 10px;text-align:center;max-width:100%;min-height:44px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recording .src{pointer-events:none}
+dialog .sec{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--mx2);margin:4px 0 8px}
+dialog .sec ~ .sec{margin-top:20px}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{display:flex;gap:12px;align-items:flex-start;border:2px solid var(--mx);background:var(--mxbg);padding:12px;cursor:pointer}
+.opt input{width:24px;height:24px;margin:2px 0 0;accent-color:var(--mx);flex:none}
+.opt b{display:block;font-size:18px;font-weight:600}
+.opt span{display:block;font-size:15px;color:var(--mx2);margin-top:2px}
+.opt:has(input:checked){background:var(--mxpanel);box-shadow:inset 6px 0 0 var(--orange)}
+dialog select{width:100%;min-height:56px;border:2px solid var(--mx);background:var(--mxbg);font:inherit;font-size:18px;padding:0 10px;color:var(--mx)}
+.hint{font-size:15px;color:var(--mx2);margin:8px 0 18px!important}
+/* Waveforms: ink bars, the played part in orange */
+.wave{display:block;width:100%;height:110px;border:2px solid var(--mx);background:var(--mxbg);margin:0 0 12px;touch-action:manipulation;cursor:pointer}
+.mini{display:block;width:100%;height:30px;margin-top:6px}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top"><h1 class="brand">Recorder beta</h1><button class="setbtn" id="setBtn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M20.22 9.46 L22.98 9.77 L22.98 14.23 L20.22 14.54 L19.61 16.01 L21.34 18.19 L18.19 21.34 L16.01 19.61 L14.54 20.22 L14.23 22.98 L9.77 22.98 L9.46 20.22 L7.99 19.61 L5.81 21.34 L2.66 18.19 L4.39 16.01 L3.78 14.54 L1.02 14.23 L1.02 9.77 L3.78 9.46 L4.39 7.99 L2.66 5.81 L5.81 2.66 L7.99 4.39 L9.46 3.78 L9.77 1.02 L14.23 1.02 L14.54 3.78 L16.01 4.39 L18.19 2.66 L21.34 5.81 L19.61 7.99 Z M15.4 12 A3.4 3.4 0 1 0 8.6 12 A3.4 3.4 0 1 0 15.4 12 Z"/></svg></button></header>
+
+  <!-- Install: shown in the browser until the app is on the home screen -->
+  <section class="box inst" id="inst" hidden>
+    <div class="lid"><h2>Put it on your home screen</h2></div>
+    <div class="body">
+      <div id="instAndroid" hidden>
+        <p>Install this as an app so it opens with one tap, like any other app.</p>
+        <div class="btns"><button class="primary" id="instBtn">Install app</button><button class="ghost" id="instLater">Not now</button></div>
+      </div>
+      <div id="instIos" hidden>
+        <p>To keep this as an app on your iPhone:</p>
+        <ol><li>Tap the <b>Share</b> button (square with an arrow up).</li><li>Tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>.</li></ol>
+        <div class="btns"><button class="ghost" id="instLater2">Got it</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recorder -->
+  <section class="box rec" id="rec">
+    <button class="recbtn" id="recBtn" type="button" aria-label="Start recording"><i></i><b id="recWord">REC</b></button>
+    <div class="clock" id="clock">0:00</div>
+    <div class="meter" id="meter" aria-hidden="true"><i id="lvl"></i><b id="hold"></b></div>
+    <div class="say" id="say">Press REC to start recording</div>
+    <button class="src" id="src" type="button" aria-label="Recording format and input. Tap to change."></button>
+  </section>
+
+  <!-- The take just recorded -->
+  <section class="box fresh" id="fresh" hidden>
+    <div class="lid"><h2>Your recording is saved</h2><span class="st" id="freshLen"></span></div>
+    <div class="body">
+      <p class="nm" id="freshName"></p>
+      <canvas class="wave" id="freshWave" aria-label="Waveform. Tap to play from that point."></canvas>
+      <div class="fbtns">
+        <button class="bigbtn" id="fPlay" type="button"><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>Listen</button>
+        <button class="bigbtn go" id="fMail" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14"/><path d="M3 6l9 7 9-7"/></svg>Email to myself</button>
+        <button class="bigbtn" id="fDel" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Delete this</button>
+        <button class="bigbtn" id="fSave" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>Download</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- All recordings -->
+  <section class="box list" id="list">
+    <div class="lid"><h2>My recordings</h2><span class="st" id="count"></span></div>
+    <div id="rows"></div>
+  </section>
+
+  <button class="textbtn" id="binBtn" type="button" hidden></button>
+  <section class="box bin" id="bin" hidden>
+    <div class="lid"><h2>Recently deleted</h2><span class="st">kept 30 days</span></div>
+    <div id="binRows"></div>
+  </section>
+
+  <p class="fine" id="fine">Recordings stay on this phone. Email one to keep a copy somewhere safe.</p>
+</main>
+
+<div class="player" id="player" hidden>
+  <div class="in">
+    <div class="nm" id="pName"></div>
+    <div class="ctrl">
+      <button id="pPrev" type="button" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z" fill="currentColor"/></svg></button>
+      <button id="pPlay" class="main" type="button" aria-label="Pause"></button>
+      <button id="pNext" type="button" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z" fill="currentColor"/></svg></button>
+      <span class="tm" id="pTime">0:00</span>
+      <input type="range" id="pSeek" min="0" max="1000" value="0" aria-label="Position">
+    </div>
+  </div>
+</div>
+
+<div class="undo" id="undo" hidden><span id="undoMsg"></span><button id="undoBtn" type="button">Undo</button></div>
+
+<dialog id="askDlg">
+  <h3 id="askTitle">Simple recorder</h3>
+  <div class="body">
+    <p id="askMsg"></p>
+    <input type="text" id="askInput" hidden autocomplete="off">
+    <div class="btns"><button class="ghost" id="askNo" type="button">Cancel</button><button class="primary" id="askYes" type="button">OK</button></div>
+  </div>
+</dialog>
+
+<dialog id="setDlg" aria-labelledby="setTitle">
+  <h3 id="setTitle">Settings</h3>
+  <div class="body">
+    <div class="sec">Recording format</div>
+    <div id="fmtList" class="opts"></div>
+    <div class="sec">Playback</div>
+    <label class="opt"><input type="checkbox" id="autoNext"><div><b>Play the next recording</b><span>When a recording ends, carry on down the list. Off: it plays just the one you pressed.</span></div></label>
+    <div class="sec">Input</div>
+    <select id="inSel" aria-label="Input"></select>
+    <p class="hint" id="inHint"></p>
+    <div class="btns"><button class="primary" id="setDone" type="button">Done</button></div>
+  </div>
+</dialog>
+
+<dialog id="welcome" aria-labelledby="welTitle">
+  <h3 id="welTitle">Welcome</h3>
+  <div class="body">
+    <ol>
+      <li>Press <b>REC</b> to start recording.</li>
+      <li>Press <b>STOP</b> when you’re done. It’s saved right away.</li>
+      <li>To send it to yourself, press <b>Email to myself</b>, choose <b>Gmail</b>, and type your email address.</li>
+    </ol>
+    <p>The first time, the phone will ask to use the microphone. Press <b>Allow</b>.</p>
+    <div class="btns"><button class="primary" id="welOk" type="button">OK, let’s start</button></div>
+  </div>
+</dialog>
+
+<audio id="audio" preload="auto"></audio>
+
+<script>
+"use strict";
+
+/* ---------- basics ---------- */
+/* Computers (not phones or tablets) get a Download button: save the file straight to a folder, e.g. for a DAW */
+const isDesktop = !(/android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (navigator.userAgentData && navigator.userAgentData.mobile) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+if (isDesktop) document.documentElement.classList.add("desktop");
+const IC = {
+  play:'<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>',
+  pause:'<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor"/></svg>',
+  mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14"/><path d="M3 6l9 7 9-7"/></svg>',
+  save:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  pen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>'
+};
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmt = s => { s = Math.max(0, Math.round(s || 0)); const m = Math.floor(s / 60); return m + ":" + String(s % 60).padStart(2, "0"); };
+const when = ts => { const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) + " · " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); };
+// The name a new take gets: its date and time, and (2), (3)… if a recording from the same minute is already in the list
+function takeName(ts) {
+  const base = when(ts), used = new Set(takes.filter(t => !t.deleted).map(t => t.name));
+  let n = base; for (let i = 2; used.has(n); i++) n = base + " (" + i + ")";
+  return n;
+}
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const extOf = type => /wav/.test(type) ? "wav" : /mp4|m4a|aac/.test(type) ? "m4a" : /ogg/.test(type) ? "ogg" : "webm";
+
+/* ---------- ask / tell dialogs: one at a time (a second one waits for the first to close) ---------- */
+let askQ = Promise.resolve();
+function ask(msg, o = {}) {
+  const p = askQ.then(() => askNow(msg, o));
+  askQ = p.catch(() => {});
+  return p;
+}
+function askNow(msg, o) {
+  const d = $("askDlg"), inp = $("askInput"), yes = $("askYes"), no = $("askNo");
+  $("askTitle").textContent = o.title || "Simple recorder";
+  $("askMsg").textContent = msg;
+  yes.textContent = o.ok || "OK";
+  yes.className = o.danger ? "danger" : "primary";
+  no.hidden = o.cancel === null;
+  no.textContent = o.cancel || "Cancel";
+  inp.hidden = o.input === undefined; inp.value = o.input || "";
+  return new Promise(res => {
+    let settled = false;
+    const done = v => {
+      if (settled) return; settled = true;
+      yes.onclick = no.onclick = inp.onkeydown = d.onclose = null;
+      // Wait for the dialog's own close event, so it can't land on the next dialog
+      if (d.open) { d.addEventListener("close", () => res(v), { once: true }); d.close(); } else res(v);
+    };
+    yes.onclick = () => done(o.input !== undefined ? inp.value.trim() : true);
+    no.onclick = () => done(null);
+    d.onclose = () => done(null);   // Back button / Escape
+    d.showModal();
+    if (!inp.hidden) { inp.focus(); inp.select(); inp.onkeydown = e => { if (e.key === "Enter") yes.click(); }; }
+  });
+}
+const tell = (msg, title) => ask(msg, { cancel: null, title });
+
+/* ---------- storage (IndexedDB, on the phone) ----------
+   takes:   each recording's details (name, length, waveform…): small, rewritten freely
+   audio:   each recording's sound, written once
+   pending + parts: a recording in progress, saved a second at a time, so a crash or a killed app can't lose it */
+const DB_NAME = "sr-beta", META = "takes", AUDIO = "audio", PEND = "pending", PARTS = "parts";
+let dbp = null;
+function db() {
+  if (dbp) return dbp;
+  const p = dbp = new Promise((res, rej) => {
+    const r = indexedDB.open(DB_NAME, 2);
+    r.onupgradeneeded = e => {
+      const d = r.result, t = r.transaction;
+      if (e.oldVersion < 1) d.createObjectStore(META, { keyPath: "id" });
+      if (e.oldVersion < 2) {
+        d.createObjectStore(AUDIO, { keyPath: "id" });
+        d.createObjectStore(PEND, { keyPath: "id" });
+        d.createObjectStore(PARTS, { autoIncrement: true }).createIndex("rid", "rid");
+        if (e.oldVersion >= 1) {   // version 1 kept the sound inside each take: move it out to its own store
+          const m = t.objectStore(META), a = t.objectStore(AUDIO);
+          m.openCursor().onsuccess = ev => {
+            const c = ev.target.result; if (!c) return;
+            const v = c.value;
+            if (v.blob) { a.put({ id: v.id, blob: v.blob }); delete v.blob; }
+            delete v.noPeaks; c.update(v); c.continue();
+          };
+        }
+      }
+    };
+    r.onsuccess = () => {
+      const d = r.result;
+      // If the connection closes (a newer version opened elsewhere, or the browser closed it), forget it so the next call reopens.
+      const drop = () => { if (dbp === p) dbp = null; };
+      d.onversionchange = () => { d.close(); drop(); };
+      d.onclose = drop;
+      res(d);
+    };
+    r.onerror = () => { dbp = null; rej(r.error); };
+  });
+  return dbp;
+}
+// One transaction; fn gets the transaction and a setter for the result
+async function tx(stores, mode, fn) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const t = d.transaction(stores, mode); let out;
+    t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error("aborted"));
+    try { fn(t, v => { out = v; }); } catch (e) { try { t.abort(); } catch (_) {} rej(e); }
+  });
+}
+const got = (r, set) => { r.onsuccess = () => set(r.result); };
+const getAll = store => tx(store, "readonly", (t, set) => got(t.objectStore(store).getAll(), set));
+function dropParts(t, rid) {
+  const ps = t.objectStore(PARTS);
+  ps.index("rid").openKeyCursor(IDBKeyRange.only(rid)).onsuccess = e => { const c = e.target.result; if (c) { ps.delete(c.primaryKey); c.continue(); } };
+  t.objectStore(PEND).delete(rid);
+}
+// A finished recording: its details and sound in one go, and the in-progress copy cleared
+const addTake = (meta, blob) => tx([META, AUDIO, PEND, PARTS], "readwrite", t => {
+  t.objectStore(AUDIO).put({ id: meta.id, blob }); t.objectStore(META).put(meta); dropParts(t, meta.id);
+});
+const dropPending = rid => tx([PEND, PARTS], "readwrite", t => dropParts(t, rid));
+const putPending = p => tx(PEND, "readwrite", t => t.objectStore(PEND).put(p));
+const addPart = (rid, seq, blob) => tx(PARTS, "readwrite", t => t.objectStore(PARTS).add({ rid, seq, blob }));
+// Change a take's details only if it still exists: a take deleted for good never comes back. Resolves true if changed.
+const updateMeta = (id, patch) => tx(META, "readwrite", (t, set) => {
+  const s = t.objectStore(META), r = s.get(id);
+  r.onsuccess = () => { if (!r.result) return set(false); s.put(Object.assign(r.result, patch)); set(true); };
+});
+const killTake = id => tx([META, AUDIO], "readwrite", t => { t.objectStore(META).delete(id); t.objectStore(AUDIO).delete(id); });
+
+let takes = [];            // details of every take, newest first
+const blobs = new Map();   // take id → its sound (the browser keeps these on disk; this holds only handles)
+const live = () => takes.filter(t => !t.deleted);
+const binned = () => takes.filter(t => t.deleted).sort((a, b) => b.deleted - a.deleted);
+async function load() {
+  const recovered = await recover();
+  const metas = (await getAll(META)) || [], auds = (await getAll(AUDIO)) || [];
+  for (const a of auds) blobs.set(a.id, a.blob);
+  const old = Date.now() - 30 * 864e5;   // deleted recordings are kept 30 days, then removed for good
+  for (const t of metas.filter(t => t.deleted && t.deleted < old)) { try { await killTake(t.id); } catch (e) {} blobs.delete(t.id); }
+  takes = metas.filter(t => !(t.deleted && t.deleted < old)).sort((a, b) => b.created - a.created);
+  return recovered;
+}
+// Recordings cut off by a crash, a dead battery or the phone closing the app: put back together from their saved parts
+async function recover() {
+  let n = 0;
+  for (const p of (await getAll(PEND)) || []) {
+    try {
+      const parts = (await tx(PARTS, "readonly", (t, set) => got(t.objectStore(PARTS).index("rid").getAll(p.id), set))) || [];
+      parts.sort((a, b) => a.seq - b.seq);
+      const body = parts.map(x => x.blob), bytes = body.reduce((s, b) => s + b.size, 0);
+      if (!bytes) { await dropPending(p.id); continue; }
+      const wav = /wav/.test(p.type);
+      const blob = new Blob(wav ? [wavHeader(bytes, p.sr, p.ch, p.bits), ...body] : body, { type: p.type });
+      const dur = wav ? bytes / (p.sr * p.ch * p.bits / 8) : parts.length * PART_SEC;
+      await addTake({ id: p.id, created: p.created, name: when(p.created) + " (rescued)", dur, type: p.type, deleted: 0, sent: 0 }, blob);
+      n++;
+    } catch (e) {}
+  }
+  return n;
+}
+
+/* Ask the browser not to clear the recordings to free up space; if it won't promise that, say so at the bottom */
+let storageSafe = null;
+async function checkStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persisted) storageSafe = (await navigator.storage.persisted()) || (await navigator.storage.persist());
+  } catch (e) {}
+  showFine();
+}
+function showFine() {
+  const unsent = live().filter(t => !t.sent).length;
+  $("fine").textContent = storageSafe === false
+    ? "Recordings are kept in this browser, which can clear them if the phone runs short of space. Email each one to keep it safe." + (unsent ? " " + unsent + " not emailed yet." : "")
+    : "Recordings stay on this phone. Email one to keep a copy somewhere safe.";
+}
+
+/* ---------- settings ----------
+   Format: compressed (the default: M4A/AAC where the phone can make it, otherwise WebM/Opus), WAV 24-bit or WAV 16-bit
+   (lossless, for mixing and mastering). Input: "auto" uses a USB mic whenever one is plugged in, otherwise the phone's own mic. */
+// AAC in MP4 first; Opus in WebM next (plain "audio/mp4" can mean Opus inside an .m4a, which many programs can't open)
+const TYPES = ["audio/mp4;codecs=mp4a.40.2", "audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"];
+const pickType = () => (window.MediaRecorder && MediaRecorder.isTypeSupported) ? (TYPES.find(t => MediaRecorder.isTypeSupported(t)) || "") : "";
+const compLabel = type => /mp4a/.test(type) ? "M4A · AAC 256 kbps" : /mp4/.test(type) ? "M4A · 256 kbps" : /ogg/.test(type) ? "OGG · Opus 256 kbps" : "WebM · Opus 256 kbps";
+const SET_KEY = "sr-beta-settings";
+const FORMATS = {
+  m4a: { label: compLabel(pickType()), note: "Small files. A whole song emails easily." },
+  wav24: { label: "WAV · 24-bit", note: "Lossless, best for mixing and mastering. About 9 MB a minute (17 MB with a stereo mic)." },
+  wav16: { label: "WAV · 16-bit", note: "Lossless, CD quality. About 6 MB a minute (11 MB with a stereo mic)." }
+};
+if (!/mp4/.test(pickType())) FORMATS.m4a.note = "Small files. This phone can't make M4A, so it records Opus, which is just as small.";
+let settings = { format: "m4a", input: "auto", autoplay: false };
+try { Object.assign(settings, JSON.parse(localStorage.getItem(SET_KEY) || "{}")); } catch (e) {}
+if (!FORMATS[settings.format]) settings.format = "m4a";
+const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {} };
+try { localStorage.removeItem("sr-beta-share-wav"); } catch (e) {}   // an old setting that could stick a phone on WAV for good
+
+/* ---------- microphones ---------- */
+// A USB mic or interface, by its name. Bluetooth earbuds and headsets never count: they record at phone-call quality.
+const BT_NAME = /bluetooth|\bbt\b|hands-?free|airpods|buds/i;
+const USB_BRANDS = /external|interface|audio device|rode|shure|yeti|zoom|tascam|focusrite|scarlett|irig|behringer|presonus|audio-technica|at2020/i;
+function isUsbMic(d) {
+  const l = d.label || "";
+  if (!l || d.deviceId === "default" || d.deviceId === "communications" || BT_NAME.test(l)) return false;
+  return /usb/i.test(l) || (USB_BRANDS.test(l) && !/headset|earpiece|speaker/i.test(l));
+}
+async function inputs() {
+  try { return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput"); } catch (e) { return []; }
+}
+// Which mic to ask for: the picked one, or in Automatic a USB mic if one is plugged in ("" = the phone's own)
+async function chosenInput() {
+  const L = await inputs();
+  if (settings.input !== "auto") return L.find(d => d.deviceId === settings.input) ? settings.input : "";
+  const usb = L.find(isUsbMic);
+  return usb ? usb.deviceId : "";
+}
+async function openMic() {
+  // Phone mics normally clean up speech (echo cancelling, noise removal, automatic volume). That ruins guitar, so it's all off.
+  const base = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 } };
+  const md = navigator.mediaDevices, id = await chosenInput();
+  let s = null;
+  if (id) { try { s = await md.getUserMedia({ audio: { ...base, deviceId: { exact: id } } }); } catch (e) {} }
+  if (!s) s = await md.getUserMedia({ audio: base });   // unplugged or not found: the phone's own mic
+  // The very first time, mic names stay hidden until Allow is pressed, so look again now for a USB mic
+  if (!id && settings.input === "auto") {
+    const again = await chosenInput(), tr = s.getAudioTracks()[0], now = tr && tr.getSettings ? tr.getSettings().deviceId : "";
+    if (again && again !== now) {
+      try { const s2 = await md.getUserMedia({ audio: { ...base, deviceId: { exact: again } } }); s.getTracks().forEach(t => t.stop()); s = s2; } catch (e) {}
+    }
+    // Bluetooth earbuds as the default mic record at phone-call quality: use the phone's own mic instead, if it can be found
+    const bt = s.getAudioTracks()[0];
+    if (bt && BT_NAME.test(bt.label || "")) {
+      const own = (await inputs()).find(d => d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications" && !BT_NAME.test(d.label || ""));
+      if (own) { try { const s2 = await md.getUserMedia({ audio: { ...base, deviceId: { exact: own.deviceId } } }); s.getTracks().forEach(t => t.stop()); s = s2; } catch (e) {} }
+    }
+  }
+  return s;
+}
+
+/* ---------- WAV ---------- */
+function wavHeader(bytes, sr, ch, bits) {
+  const h = new DataView(new ArrayBuffer(44)), B = bits / 8;
+  const S = (o, t) => { for (let i = 0; i < t.length; i++) h.setUint8(o + i, t.charCodeAt(i)); };
+  S(0, "RIFF"); h.setUint32(4, 36 + bytes, true); S(8, "WAVE"); S(12, "fmt "); h.setUint32(16, 16, true);
+  h.setUint16(20, 1, true); h.setUint16(22, ch, true); h.setUint32(24, sr, true); h.setUint32(28, sr * ch * B, true);
+  h.setUint16(32, ch * B, true); h.setUint16(34, bits, true); S(36, "data"); h.setUint32(40, bytes, true);
+  return h.buffer;
+}
+// Float samples (one array per channel) → interleaved 16- or 24-bit PCM bytes
+function pcm(chans, ch, bits) {
+  const B = bits / 8, n = chans[0].length, out = new Uint8Array(n * ch * B); let o = 0;
+  for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) {
+    const x = Math.max(-1, Math.min(1, (chans[c] || chans[0])[i]));
+    if (B === 2) { const v = Math.round(x < 0 ? x * 32768 : x * 32767); out[o++] = v & 255; out[o++] = (v >> 8) & 255; }
+    else { const v = Math.round(x < 0 ? x * 8388608 : x * 8388607); out[o++] = v & 255; out[o++] = (v >> 8) & 255; out[o++] = (v >> 16) & 255; }
+  }
+  return out;
+}
+// Two channels with exactly the same samples are one mic copied twice: keep one
+const sameChannels = chans => { if (chans.length < 2) return true; const a = chans[0], b = chans[1]; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
+const loudest = chans => { let m = 0; for (const a of chans) for (let i = 0; i < a.length; i++) { const v = Math.abs(a[i]); if (v > m) m = v; } return m; };
+
+// The worklet collects about a second of raw samples at a time and hands the buffers over (moved, not copied)
+const WAV_WORKLET = `class Cap extends AudioWorkletProcessor{
+  constructor(o){super();this.N=o.processorOptions.n;this.c=null;this.n=0;this.port.onmessage=()=>this.send(true)}
+  send(done){const ch=this.c?this.c.map(a=>a.slice(0,this.n)):[];this.port.postMessage({ch,done},ch.map(a=>a.buffer));this.c=null;this.n=0}
+  process(ins){const i=ins[0];if(i&&i.length&&i[0].length){
+    if(this.c&&this.c.length!==i.length)this.send(false);
+    if(!this.c)this.c=i.map(()=>new Float32Array(this.N));
+    for(let j=0;j<i.length;j++)this.c[j].set(i[j],this.n);this.n+=i[0].length;
+    if(this.n+i[0].length>this.N)this.send(false)}return true}}
+registerProcessor("cap",Cap);`;
+
+/* ---------- recording ----------
+   Each take is one Recording, which owns its mic, audio context, screen lock and timers, so finishing one take can
+   never touch the next. It moves starting → recording → stopping → saving → done.
+   M4A goes through the phone's own encoder (MediaRecorder); WAV is taken sample by sample from the mic (an AudioWorklet)
+   at the phone's own rate, usually 48 kHz. Either way the sound is saved to the phone every second as it comes in. */
+const PART_SEC = 1, START_GAP = 700, STOP_GAP = 400;
+let session = null;   // the take in progress, from the tap on REC until it's saved
+
+class Recording {
+  constructor(format) {
+    this.format = format; this.wav = format !== "m4a"; this.state = "starting";
+    this.id = newId(); this.created = Date.now();
+    this.parts = []; this.bytes = 0; this.seq = 0; this.saves = Promise.resolve(); this.persist = true;
+    this.hold = []; this.holdN = 0; this.ch = 0; this.clipped = false;
+  }
+  async start() {
+    // Made during the tap itself: phones keep audio made later, after the mic question, switched off
+    try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); this.ctx.resume(); } catch (e) { this.ctx = null; }
+    if (!navigator.mediaDevices || (!this.wav && !window.MediaRecorder) || (this.wav && !(this.ctx && this.ctx.audioWorklet))) throw new Error("nosupport");
+    try { this.stream = await openMic(); } catch (e) { const err = new Error("nomic"); err.mic = e && e.name; throw err; }
+    const tr = this.stream.getAudioTracks()[0];
+    this.inputName = (tr && tr.label) || "";
+    // The mic went away (unplugged, a phone call took it…): finish and keep what's there
+    if (tr) tr.addEventListener("ended", () => this.stop());
+    if (this.wav) await this.startWav(); else this.startEncoder();
+    if (this.ctx) this.ctx.onstatechange = () => { if (this.state === "recording" && this.ctx.state === "suspended") this.ctx.resume().catch(() => {}); };
+    this.state = "recording"; this.t0 = Date.now();
+    recUI(this);
+    this.meter();
+    this.keepAwake();
+  }
+  startEncoder() {
+    const type = pickType();
+    let mr;
+    try { mr = new MediaRecorder(this.stream, type ? { mimeType: type, audioBitsPerSecond: 256000 } : { audioBitsPerSecond: 256000 }); }
+    catch (e) { mr = new MediaRecorder(this.stream); }
+    this.mr = mr;
+    mr.ondataavailable = e => { if (e.data && e.data.size) this.keep(e.data); };
+    this.stopped = new Promise(r => { mr.onstop = () => { r(); this.stop(); }; });   // stops by itself if the mic ends
+    mr.onerror = () => this.stop();
+    mr.start(PART_SEC * 1000);
+    this.type = (mr.mimeType || type || "audio/webm").split(";")[0];
+    this.savePending();
+  }
+  async startWav() {
+    const ctx = this.ctx;
+    this.bits = this.format === "wav16" ? 16 : 24; this.type = "audio/wav"; this.sr = ctx.sampleRate;
+    const url = URL.createObjectURL(new Blob([WAV_WORKLET], { type: "text/javascript" }));
+    try { await ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
+    const src = ctx.createMediaStreamSource(this.stream);
+    const node = new AudioWorkletNode(ctx, "cap", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { n: Math.round(this.sr * PART_SEC) } });
+    const mute = ctx.createGain(); mute.gain.value = 0;
+    src.connect(node); node.connect(mute); mute.connect(ctx.destination);   // pulled by the graph, heard by nobody
+    this.nodes = [src, node, mute];
+    this.stopped = new Promise(r => { node.port.onmessage = e => { if (this.flushed) return; this.samples(e.data.ch); if (e.data.done) { this.flushed = true; r(); } }; });
+    this.flush = () => node.port.postMessage("flush");
+  }
+  // WAV: decide mono or stereo from the first sound (a phone mic often arrives as one channel copied twice), then save
+  samples(chans) {
+    if (!chans || !chans.length || !chans[0].length) return;
+    if (this.ch) return this.keep(new Blob([pcm(chans, this.ch, this.bits)]));
+    this.hold.push(chans); this.holdN += chans[0].length;
+    const heard = this.hold.filter(c => loudest(c) > 1e-4);
+    if (heard.length || this.holdN >= this.sr * 3) this.decide(heard);
+  }
+  decide(heard) {
+    const many = this.hold.length ? Math.min(2, Math.max(...this.hold.map(c => c.length))) : 1;
+    this.ch = many > 1 && heard.length && heard.every(sameChannels) ? 1 : many;
+    this.savePending();
+    const held = this.hold; this.hold = [];
+    for (const c of held) this.keep(new Blob([pcm(c, this.ch, this.bits)]));
+  }
+  savePending() {
+    const p = { id: this.id, created: this.created, type: this.type, sr: this.sr || 0, ch: this.ch || 0, bits: this.bits || 0 };
+    this.saves = this.saves.then(() => this.persist && putPending(p)).catch(() => { this.persist = false; });
+  }
+  // Each piece of sound: kept for the finished file, and saved to the phone in case the app is cut off
+  keep(b) {
+    this.parts.push(b); this.bytes += b.size;
+    const seq = this.seq++;
+    this.saves = this.saves.then(() => this.persist && addPart(this.id, seq, b)).catch(() => { this.persist = false; });
+  }
+  async keepAwake() {   // keep the screen on while recording
+    try {
+      const w = await navigator.wakeLock.request("screen");
+      if (this.state !== "recording") return w.release();
+      try { this.wake && this.wake.release(); } catch (e) {}
+      this.wake = w;
+    } catch (e) {   // no screen lock on this phone, or it said no: say so quietly, never with a pop-up
+      if (this.state === "recording" && !this.clipped) $("say").innerHTML = '<span class="dot"></span>Recording… keep the screen on while you record';
+    }
+  }
+  meter() {
+    try {
+      const an = this.ctx.createAnalyser(); an.fftSize = 2048;
+      this.ctx.createMediaStreamSource(this.stream).connect(an);
+      const buf = new Float32Array(an.fftSize), lvl = $("lvl"), hold = $("hold");
+      let held = 0, heldAt = 0;
+      const draw = () => {
+        if (this.state !== "recording") return;
+        an.getFloatTimeDomainData(buf);
+        let pk = 0; for (let i = 0; i < buf.length; i++) { const v = Math.abs(buf[i]); if (v > pk) pk = v; }
+        // dB scale: -60 dB at the left, 0 dB (the top) at the right
+        const pct = Math.max(0, Math.min(100, (20 * Math.log10(pk || 1e-9) + 60) / 60 * 100)), now = performance.now();
+        if (pct >= held || now - heldAt > 1500) { held = pct; heldAt = now; }
+        lvl.style.width = pct.toFixed(1) + "%"; lvl.classList.toggle("hot", pct > 95);
+        hold.style.left = "calc(" + held.toFixed(1) + "% - 3px)";
+        if (pk >= 0.995 && !this.clipped) {
+          this.clipped = true; $("meter").classList.add("clip");
+          $("say").innerHTML = '<span class="dot"></span>Too loud: move the phone back a little';
+        }
+        this.raf = requestAnimationFrame(draw);
+      };
+      draw();
+    } catch (e) {}
+  }
+  async stop() {
+    if (this.state !== "recording") return;
+    this.state = "stopping";
+    try {
+      this.dur = (Date.now() - this.t0) / 1000;
+      stoppingUI();
+      if (this.mr) { try { if (this.mr.state !== "inactive") this.mr.stop(); } catch (e) {} }
+      else if (this.flush) this.flush();
+      await Promise.race([this.stopped, sleep(4000)]);
+      if (this.wav && !this.ch) this.decide(this.hold.filter(c => loudest(c) > 1e-4));
+      this.cleanup();
+      await this.saves;
+      this.state = "saving";
+      await saveRecording(this);
+    } catch (e) {
+      // The sound saved so far stays on the phone and is put back together the next time the app opens (see recover)
+      try { this.cleanup(); } catch (err) {}
+      tell(this.persist ? "Something went wrong saving that recording. Close the app and open it again: it will be brought back." : "Something went wrong and that recording couldn't be saved. Sorry about that. Try again.");
+    } finally {
+      this.state = "done";
+      if (session === this) session = null;
+      idleUI();
+      leftNote();
+    }
+  }
+  cleanup() {
+    cancelAnimationFrame(this.raf);
+    try { (this.nodes || []).forEach(n => n.disconnect()); } catch (e) {}
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+    try { this.ctx && this.ctx.state !== "closed" && this.ctx.close(); } catch (e) {}
+    try { this.wake && this.wake.release(); } catch (e) {}
+    this.wake = null;
+  }
+}
+
+async function saveRecording(s) {
+  const body = s.parts; s.parts = [];
+  if (!s.bytes) { try { await dropPending(s.id); } catch (e) {} return tell("Nothing was recorded. Try again."); }
+  const blob = new Blob(s.wav ? [wavHeader(s.bytes, s.sr, s.ch, s.bits), ...body] : body, { type: s.type });
+  const meta = { id: s.id, created: s.created, name: takeName(s.created), dur: s.dur, type: s.type, deleted: 0, sent: 0 };
+  try { await addTake(meta, blob); }
+  catch (e) {
+    // The phone wouldn't keep it (usually out of space): don't lose the take, put it in Downloads instead
+    const name = shareName(meta) + "." + extOf(s.type);
+    saveFile(new File([blob], name, { type: s.type }));
+    try { await dropPending(s.id); } catch (err) {}
+    return tell("The phone couldn't keep this recording in the app (it may be out of space), so it was saved to your Downloads instead as " + name + ".", "Recording saved");
+  }
+  blobs.set(meta.id, blob);
+  takes.unshift(meta);
+  freshId = meta.id;
+  render();
+}
+
+async function startRec() {
+  stopPlay();
+  const s = session = new Recording(settings.format);
+  try { await s.start(); }
+  catch (e) {
+    s.state = "done"; s.cleanup();
+    if (session === s) session = null;
+    idleUI();
+    if (e.message === "nosupport") return tell("This browser can't record. Open the app in Chrome (Android) or Safari (iPhone).");
+    if (e.message === "nomic" && /^(NotReadable|Abort)/.test(e.mic)) return tell("The microphone is busy. Another app or a phone call may be using it. Close that and try again.", "Microphone");
+    if (e.message === "nomic" && /^(NotFound|Overconstrained)/.test(e.mic)) return tell("No microphone was found. If you use a plug-in mic, unplug it and plug it back in.", "Microphone");
+    if (e.message === "nomic") return tell("The app needs the microphone to record.\n\nWhen your phone asks, tap Allow. If you said no before, open the browser's site settings for this page and allow the microphone.", "Microphone");
+    return tell("Recording couldn't start in this format. Try M4A in Settings.");
+  }
+}
+const recording = () => !!(session && session.state === "recording");
+// A take that ended because the screen went off or he left the app: said once, when it's saved and the app is back in front
+let hiddenStop = false;
+function leftNote() {
+  if (!hiddenStop || session || document.hidden) return;
+  hiddenStop = false;
+  tell("Recording stopped because the screen turned off or you left the app. What you played up to then is saved.");
+}
+
+/* What the recorder panel shows */
+let tick = 0;
+function recUI(s) {
+  document.body.classList.add("recording");
+  $("recBtn").setAttribute("aria-label", "Stop recording"); $("recWord").textContent = "STOP";
+  $("say").innerHTML = '<span class="dot"></span>Recording… press STOP when you’re done';
+  $("meter").classList.remove("clip");
+  $("fresh").hidden = true;
+  showSource();
+  clearInterval(tick);
+  tick = setInterval(() => $("clock").textContent = fmt((Date.now() - s.t0) / 1000), 250);
+}
+function stoppingUI() {
+  clearInterval(tick);
+  document.body.classList.remove("recording");
+  $("recBtn").disabled = true;
+  $("say").textContent = "Saving…";
+}
+function idleUI() {
+  clearInterval(tick);
+  document.body.classList.remove("recording");
+  $("recBtn").disabled = false;
+  $("recBtn").setAttribute("aria-label", "Start recording"); $("recWord").textContent = "REC";
+  $("lvl").style.width = "0"; $("meter").classList.remove("clip");
+  $("clock").textContent = "0:00";
+  $("say").textContent = "Press REC to start recording";
+  showSource();
+}
+
+// A double-tap is one tap: STOP is ignored just after REC (it would end the take it started),
+// and REC just after STOP (it would start a new take nobody asked for)
+let lastStart = -1e9, lastStop = -1e9;
+$("recBtn").onclick = () => {
+  const now = performance.now();
+  if (!session) { if (now - lastStop < STOP_GAP) return; lastStart = now; startRec(); }
+  else if (session.state === "recording") { if (now - lastStart < START_GAP) return; lastStop = now; session.stop(); }
+  // starting, stopping or saving: wait for it
+};
+document.addEventListener("visibilitychange", () => {
+  // If the app goes to the background mid-take, finish and save it rather than lose it
+  if (document.hidden) { if (recording()) { hiddenStop = true; session.stop(); } }
+  else { if (recording()) session.keepAwake(); leftNote(); checkUpdate(); }   // screen locks let go when the page hides: take it again
+});
+
+/* ---------- reading a take back: its waveform, and a WAV copy ---------- */
+async function decode(blob, rate) {
+  const C = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  let ac; try { ac = new C(1, 1, rate); } catch (e) { ac = new C(1, 1, 44100); }   // some browsers won't go as low as PEAK_RATE
+  const data = await blob.arrayBuffer();
+  return await new Promise((res, rej) => { const p = ac.decodeAudioData(data, res, rej); if (p && p.then) p.catch(() => {}); });
+}
+function peaksOf(buf, n = 800) {
+  const L = buf.length, out = new Array(n).fill(0), chs = [];
+  for (let c = 0; c < buf.numberOfChannels; c++) chs.push(buf.getChannelData(c));
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * L / n), b = Math.max(a + 1, Math.floor((i + 1) * L / n));
+    let m = 0;
+    for (const d of chs) for (let j = a; j < b && j < L; j++) { const v = Math.abs(d[j]); if (v > m) m = v; }
+    out[i] = Math.round(Math.min(1, m) * 1000) / 1000;
+  }
+  return out;
+}
+function wavOf(buf) {
+  const chans = []; for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) chans.push(buf.getChannelData(c));
+  const ch = sameChannels(chans) ? 1 : chans.length, body = pcm(chans, ch, 16);
+  return new Blob([wavHeader(body.length, buf.sampleRate, ch, 16), body], { type: "audio/wav" });
+}
+// Fill in the waveform (and the exact length) of any take that doesn't have one yet. Decoded at a low rate: a picture needs
+// little detail, and a long take at full rate would fill the phone's memory.
+const PEAK_RATE = 8000;
+let peakBusy = false;
+async function fillPeaks() {
+  if (peakBusy) return; peakBusy = true;
+  let changed = false;
+  try {
+    for (;;) {
+      const t = takes.find(t => !t.peaks && !t.peakFail && blobs.has(t.id)); if (!t) break;
+      try {
+        const buf = await decode(blobs.get(t.id), PEAK_RATE), patch = { peaks: peaksOf(buf) };
+        if (buf.duration > .2) patch.dur = buf.duration;
+        if (await updateMeta(t.id, patch)) { Object.assign(t, patch); changed = true; } else t.peakFail = true;
+      } catch (e) { t.peakFail = true; }   // tried again the next time the app opens
+      drawAll();
+    }
+  } finally { peakBusy = false; }
+  if (changed) render();
+}
+
+/* ---------- names, files ---------- */
+const cleanName = n => n.replace(/,/g, "").replace(/:/g, ".").replace(/[\\/*?"<>|·]+/g, "-").replace(/\s+/g, " ").replace(/(\s*-\s*)+/g, " - ").replace(/^[-\s]+|[-\s]+$/g, "") || "Recording";
+// File name for a take; two takes with the same name get (2), (3)… so their files never overwrite each other
+function shareName(t) {
+  const base = cleanName(t.name);
+  const same = takes.filter(x => cleanName(x.name) === base).sort((a, b) => a.created - b.created);
+  const i = same.findIndex(x => x.id === t.id);
+  return i > 0 ? base + " (" + (i + 1) + ")" : base;
+}
+function saveFile(file) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+async function markSent(t) {
+  if (t.sent) return;
+  try { if (await updateMeta(t.id, { sent: Date.now() })) { t.sent = Date.now(); render(); } } catch (e) {}
+}
+
+/* ---------- email: the share sheet hands the file to Gmail with it already attached ----------
+   Android Chrome only shares files whose type is on its own list: a recording labelled audio/mp4 is refused, the same file
+   labelled audio/x-m4a is fine. canShare() says up front whether a file will be refused; if it would be, the take is turned
+   into a WAV (always accepted) and one more tap sends it. That's decided per file, every time: nothing sticks. */
+function shareFile(t) {
+  const ty = t.type || "";
+  const [ext, mime] = /wav/.test(ty) ? ["wav", "audio/wav"] : /mp4|m4a|aac/.test(ty) ? ["m4a", "audio/x-m4a"] : /webm/.test(ty) ? ["weba", "audio/webm"] : /ogg/.test(ty) ? ["ogg", "audio/ogg"] : ["m4a", "audio/x-m4a"];
+  return new File([blobs.get(t.id)], shareName(t) + "." + ext, { type: mime });
+}
+async function wavFile(t) { return new File([wavOf(await decode(blobs.get(t.id), 48000))], shareName(t) + ".wav", { type: "audio/wav" }); }
+const shareData = (t, file) => ({ files: [file], title: t.name, text: t.name + " (" + fmt(t.dur) + ")" });
+const canShareFile = f => { try { return !navigator.canShare || navigator.canShare({ files: [f] }); } catch (e) { return false; } };
+const READY = ["Your recording is ready to email.", { ok: "Email it", title: "Email to myself" }];
+async function toWav(t) {
+  let w; try { w = await wavFile(t); } catch (e) { downloadMail(t, shareFile(t)); return null; }
+  if (canShareFile(w)) return w;
+  downloadMail(t, w); return null;
+}
+async function emailTake(t) {
+  if (!blobs.has(t.id)) return tell("This recording's sound is missing, so it can't be sent.");
+  if (!navigator.share) return downloadMail(t, shareFile(t));
+  let file = shareFile(t), needTap = false, warned = null;
+  if (!canShareFile(file)) {   // this phone won't share this kind of file
+    if (/wav/.test(file.type)) return downloadMail(t, file);
+    if (!(file = await toWav(t))) return;
+    needTap = true;            // making the WAV took a while: the share menu needs a fresh tap
+  }
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (file.size > 25e6 && warned !== file) {
+      // Gmail attaches up to 25 MB; bigger files go through Drive from the same share menu
+      warned = file;
+      const mb = Math.round(file.size / 1e6);
+      if (!(await ask("This recording is " + mb + " MB. That's too big to attach to an email (Gmail takes up to 25 MB).\n\nIn the share menu, choose Drive to save it there, then share it from Drive. Or choose M4A in Settings for smaller files.", { ok: "Open share menu", title: "Big recording" }))) return;
+      needTap = false;
+    }
+    if (needTap && !(await ask(...READY))) return;
+    try { await navigator.share(shareData(t, file)); return markSent(t); }
+    catch (e) {
+      if (e.name === "AbortError") return;   // he closed the share menu himself
+      // Refused. Usually the tap was too long ago, and one more tap fixes it. If it's refused again, the phone doesn't
+      // like the file itself: send a WAV instead. After that, save it to Downloads and open an email.
+      if (attempt === 1 && !/wav/.test(file.type)) { if (!(file = await toWav(t))) return; }
+      else if (attempt > 0) return downloadMail(t, file);
+      needTap = true;
+    }
+  }
+}
+// Download: the recording exactly as recorded (WAV stays WAV, M4A stays M4A), named by its title
+function downloadTake(t) {
+  if (!blobs.has(t.id)) return tell("This recording's sound is missing.");
+  saveFile(new File([blobs.get(t.id)], shareName(t) + "." + extOf(t.type || ""), { type: t.type }));
+  markSent(t);
+}
+// No share menu at all (some computers): save the file and open a new email to attach it to
+async function downloadMail(t, file) {
+  saveFile(file); markSent(t);
+  await tell("This browser can't attach files to email by itself, so the recording was saved to your Downloads.\n\nAn email will open next: attach " + file.name + " to it.", "Email");
+  location.href = "mailto:?subject=" + encodeURIComponent(t.name) + "&body=" + encodeURIComponent("Recording attached.");
+}
+
+/* ---------- delete, undo, recently deleted ----------
+   Every change is saved first and shown after, so the screen never shows something the phone didn't keep. */
+let undoTimer = 0, undoList = [];
+async function setDeleted(t, v) { if (!(await updateMeta(t.id, { deleted: v }))) return false; t.deleted = v; return true; }
+function showUndo() {
+  clearTimeout(undoTimer);
+  $("undoMsg").textContent = undoList.length > 1 ? undoList.length + " recordings deleted." : "Recording deleted.";
+  $("undo").hidden = false;
+  undoTimer = setTimeout(hideUndo, 10000);
+}
+function hideUndo() { clearTimeout(undoTimer); $("undo").hidden = true; undoList = []; }
+// Undo brings back everything deleted while the bar was showing, and the just-recorded box if that was one of them
+$("undoBtn").onclick = async () => {
+  const L = undoList; hideUndo();
+  for (const { t, wasFresh } of L) { try { if ((await setDeleted(t, 0)) && wasFresh) freshId = t.id; } catch (e) {} }
+  render();
+};
+const deleting = new Set();   // takes being deleted right now: a second tap on the same one does nothing
+async function delTake(t) {
+  if (t.deleted || deleting.has(t.id)) return;
+  deleting.add(t.id);
+  try {
+    const wasFresh = freshId === t.id;
+    try { if (!(await setDeleted(t, Date.now()))) return; }
+    catch (e) { return tell("That recording couldn't be deleted. Try again."); }
+    if (cur && cur.id === t.id) stopPlay();
+    if (wasFresh) freshId = null;
+    undoList.push({ t, wasFresh });
+    render(); showUndo();
+  } finally { deleting.delete(t.id); }
+}
+async function restoreTake(t) {
+  try { await setDeleted(t, 0); } catch (e) { return tell("That recording couldn't be restored. Try again."); }
+  render();
+}
+async function purgeTake(t) {
+  const ok = await ask("Delete “" + t.name + "” for good? This can't be undone.", { ok: "Delete", danger: true, title: "Delete for good" });
+  if (!ok) return;
+  try { await killTake(t.id); } catch (e) { return tell("That recording couldn't be deleted. Try again."); }
+  takes = takes.filter(x => x !== t); blobs.delete(t.id); render();
+}
+async function renameTake(t) {
+  const n = await ask("Name this recording:", { input: t.name, ok: "Save", title: "Rename" });
+  if (!n) return;
+  const name = n.slice(0, 80);
+  try { if (await updateMeta(t.id, { name })) t.name = name; } catch (e) { return tell("The new name couldn't be saved. Try again."); }
+  render();
+}
+
+/* ---------- player: plays the one pressed and stops at its end; with "Play the next recording" on (Settings),
+   it carries on down the list, newest first. ◀◀ / ▶▶ always move through the list. */
+const audio = $("audio");
+let cur = null, url = null, freshId = null, binOpen = false;
+const durOf = t => (audio.duration && isFinite(audio.duration)) ? audio.duration : (t && t.dur) || 0;   // WebM files don't know their length
+function playTake(t) {
+  if (session) return;
+  if (cur && cur.id === t.id) { audio.paused ? audio.play() : audio.pause(); return; }
+  if (!blobs.has(t.id)) return tell("This recording's sound is missing.");
+  if (url) URL.revokeObjectURL(url);
+  cur = t; url = URL.createObjectURL(blobs.get(t.id));
+  audio.src = url; audio.play().catch(() => {});
+  if ("mediaSession" in navigator) { try { navigator.mediaSession.metadata = new MediaMetadata({ title: t.name, artist: "Simple recorder" }); } catch (e) {} }
+  $("player").hidden = false; document.body.classList.add("playing");
+  paint();
+}
+function stopPlay() {
+  audio.pause(); audio.removeAttribute("src"); audio.load();
+  if (url) URL.revokeObjectURL(url); url = null; cur = null;
+  $("player").hidden = true; document.body.classList.remove("playing");
+  paint(); drawAll();
+}
+function step(n) {
+  const L = live(); if (!cur || !L.length) return;
+  const i = L.findIndex(t => t.id === cur.id) + n;
+  if (i >= 0 && i < L.length) playTake(L[i]); else if (n > 0) stopPlay();
+}
+// Play from a point (0–1) in a take, starting it if needed
+function playFrom(t, f) {
+  const go = () => { audio.currentTime = f * durOf(t); drawAll(); };
+  if (!cur || cur.id !== t.id) { playTake(t); if (cur === t) audio.addEventListener("loadedmetadata", go, { once: true }); }
+  else { go(); if (audio.paused) audio.play().catch(() => {}); }
+}
+$("pPlay").onclick = () => cur && (audio.paused ? audio.play() : audio.pause());
+$("pPrev").onclick = () => { if (audio.currentTime > 3) audio.currentTime = 0; else step(-1); };
+$("pNext").onclick = () => step(1);
+audio.onended = () => {
+  if (settings.autoplay) return step(1);
+  audio.currentTime = 0; paint(); drawAll();   // back to the start, ready to play again
+};
+audio.onplay = () => { paint(); startWaveLoop(); };
+audio.onpause = () => { paint(); drawAll(); };
+let seeking = false;
+$("pSeek").oninput = () => { seeking = true; $("pTime").textContent = fmt(durOf(cur) * $("pSeek").value / 1000); };
+$("pSeek").onchange = () => { audio.currentTime = durOf(cur) * $("pSeek").value / 1000; seeking = false; };
+audio.ontimeupdate = () => {
+  if (seeking || !cur) return;
+  const d = durOf(cur);
+  $("pTime").textContent = fmt(audio.currentTime);
+  $("pSeek").value = d ? Math.round(audio.currentTime / d * 1000) : 0;
+  if (audio.paused) drawAll();
+};
+function paint() {
+  const on = cur && !audio.paused;
+  document.body.classList.toggle("paused", !on);
+  $("pPlay").innerHTML = on ? IC.pause : IC.play;
+  $("pPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  if (cur) $("pName").textContent = cur.name;
+  document.querySelectorAll("#rows .row").forEach(r => {
+    const me = cur && r.dataset.id === cur.id;
+    r.classList.toggle("on", !!me);
+    r.querySelector(".pbox").innerHTML = me && on ? IC.pause : IC.play;
+  });
+  if (freshId) $("fPlay").lastChild.textContent = (cur && cur.id === freshId && on) ? "Pause" : "Listen";
+}
+
+/* ---------- settings screen ---------- */
+const micName = (d, i) => d.label || ("Microphone " + (i + 1));
+async function showSource() {
+  if (session && session.state !== "starting" && session.type) {
+    const s = session;
+    const fmtTxt = s.wav ? "WAV " + s.bits + "-bit" : compLabel(s.mr && s.mr.mimeType || s.type).split(" · ")[0] + " 256k";
+    const sr = s.wav && s.sr ? Math.round(s.sr / 100) / 10 + " kHz" : "";
+    $("src").textContent = [fmtTxt, sr, s.inputName || "Phone mic"].filter(Boolean).join(" · ");
+    return;
+  }
+  const L = await inputs();
+  let inp = "Automatic";
+  if (settings.input !== "auto") { const i = L.findIndex(d => d.deviceId === settings.input); if (i >= 0) inp = micName(L[i], i); }
+  else { const u = L.find(isUsbMic); if (u) inp = u.label; }
+  if (!session) $("src").textContent = FORMATS[settings.format].label + " · " + inp;
+}
+async function fillSettings() {
+  $("autoNext").checked = !!settings.autoplay;
+  const fl = $("fmtList"); fl.textContent = "";
+  for (const [k, f] of Object.entries(FORMATS)) {
+    const l = document.createElement("label"); l.className = "opt";
+    l.innerHTML = '<input type="radio" name="fmt"><div><b></b><span></span></div>';
+    l.querySelector("b").textContent = f.label; l.querySelector("span").textContent = f.note;
+    const r = l.querySelector("input"); r.value = k; r.checked = settings.format === k;
+    r.onchange = () => { settings.format = k; saveSettings(); showSource(); };
+    fl.append(l);
+  }
+  const L = await inputs(), sel = $("inSel"); sel.textContent = "";
+  const add = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; sel.append(o); };
+  add("auto", "Automatic (USB mic when plugged in)");
+  L.filter(d => d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications").forEach((d, i) => add(d.deviceId, micName(d, i)));
+  if (settings.input !== "auto" && ![...sel.options].some(o => o.value === settings.input)) add(settings.input, "Picked mic (not plugged in)");
+  sel.value = settings.input;
+  $("inHint").textContent = L.some(d => d.label)
+    ? "Plug a USB mic into the phone and Automatic uses it. Unplug it and the phone's own mic is used. Bluetooth earbuds are never used."
+    : "Press REC once and allow the microphone, then the mic names show here.";
+}
+$("autoNext").onchange = () => { settings.autoplay = $("autoNext").checked; saveSettings(); };
+$("inSel").onchange = () => { settings.input = $("inSel").value; saveSettings(); showSource(); };
+$("setBtn").onclick = $("src").onclick = async () => { if (session) return; await fillSettings(); $("setDlg").showModal(); };
+$("setDone").onclick = () => $("setDlg").close();
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener)
+  navigator.mediaDevices.addEventListener("devicechange", () => { showSource(); if ($("setDlg").open) fillSettings(); });
+
+/* ---------- waveforms ---------- */
+const INK = "#141414", ORANGE = "#ff4d00", DIM = "#bdbcb6";
+function drawWave(cv, peaks, prog) {
+  const r = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  if (cv.width !== Math.round(w * r) || cv.height !== Math.round(h * r)) { cv.width = Math.round(w * r); cv.height = Math.round(h * r); }
+  const c = cv.getContext("2d"); c.setTransform(r, 0, 0, r, 0, 0); c.clearRect(0, 0, w, h);
+  if (!peaks || !peaks.length) { c.fillStyle = DIM; c.fillRect(0, h / 2 - 1, w, 2); return; }
+  const bw = 2, gap = 1, n = Math.max(1, Math.floor(w / (bw + gap))), mid = h / 2;
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * peaks.length / n), b = Math.max(a + 1, Math.floor((i + 1) * peaks.length / n));
+    let v = 0; for (let j = a; j < b; j++) v = Math.max(v, peaks[j] || 0);
+    const bh = Math.max(2, v * (h - 6));
+    c.fillStyle = prog > 0 && (i + .5) / n <= prog ? ORANGE : INK;
+    c.fillRect(i * (bw + gap), mid - bh / 2, bw, bh);
+  }
+  if (prog > 0) { c.fillStyle = INK; c.fillRect(Math.min(w - 2, prog * w), 0, 2, h); }
+}
+const progOf = t => { if (!cur || cur.id !== t.id) return 0; const d = durOf(t); return d ? Math.min(1, audio.currentTime / d) : 0; };
+function drawAll() {
+  const f = freshId && takes.find(t => t.id === freshId);
+  if (f && !$("fresh").hidden) drawWave($("freshWave"), f.peaks, progOf(f));
+  document.querySelectorAll("#rows .row").forEach(r => {
+    const t = takes.find(x => x.id === r.dataset.id), cv = r.querySelector(".mini");
+    if (t && cv) drawWave(cv, t.peaks, progOf(t));
+  });
+}
+let waveRaf = 0;
+// While playing, only the playing take's progress moves, so redraw just that one (its row and the fresh card).
+function drawPlaying() {
+  if (!cur) return;
+  const t = takes.find(x => x.id === cur.id); if (!t) return;
+  if (t.id === freshId && !$("fresh").hidden) drawWave($("freshWave"), t.peaks, progOf(t));
+  const r = document.querySelector(`#rows .row[data-id="${CSS.escape(t.id)}"]`), cv = r && r.querySelector(".mini");
+  if (cv) drawWave(cv, t.peaks, progOf(t));
+}
+function waveLoop() { drawPlaying(); waveRaf = (cur && !audio.paused) ? requestAnimationFrame(waveLoop) : 0; }
+function startWaveLoop() { if (!waveRaf) { drawAll(); waveLoop(); } }   // one full redraw clears any previous take's progress line
+window.addEventListener("resize", drawAll);
+// Tap the big waveform to play from that point (a tap, not a scroll that happens to start on it)
+$("freshWave").addEventListener("click", e => {
+  const t = takes.find(x => x.id === freshId); if (!t) return;
+  const rc = $("freshWave").getBoundingClientRect();
+  playFrom(t, Math.max(0, Math.min(1, (e.clientX - rc.left) / rc.width)));
+});
+
+/* ---------- drawing the page ---------- */
+function btn(cls, html, label, fn) { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.innerHTML = html; if (label) b.setAttribute("aria-label", label); b.onclick = fn; return b; }
+function render() {
+  const L = live(), rows = $("rows"); rows.textContent = "";
+  $("count").textContent = L.length ? L.length + (L.length === 1 ? " take" : " takes") : "";
+  if (!L.length) rows.innerHTML = '<div class="empty">No recordings yet. Press REC to make your first one.</div>';
+  for (const t of L) {
+    const r = document.createElement("div"); r.className = "row"; r.dataset.id = t.id;
+    const p = btn("play", '<span class="pbox"></span><span class="meta"><span class="t"></span><span class="s"></span></span>', "Play " + t.name, () => playTake(t));
+    p.querySelector(".t").textContent = t.name;
+    const s = p.querySelector(".s"); s.textContent = fmt(t.dur);
+    if (!t.sent) { const em = document.createElement("em"); em.textContent = " · not emailed yet"; s.append(em); }
+    const mini = document.createElement("canvas"); mini.className = "mini"; mini.setAttribute("aria-hidden", "true");
+    p.querySelector(".meta").append(mini);
+    r.append(p, btn("act", IC.pen + "Name", "Rename", () => renameTake(t)), btn("act", IC.mail + "Email", "Email to myself", () => emailTake(t)));
+    if (isDesktop) r.append(btn("act", IC.save + "Download", "Download", () => downloadTake(t)));
+    r.append(btn("act", IC.trash + "Delete", "Delete", () => delTake(t)));
+    rows.append(r);
+  }
+  // The take just made gets its own box with big buttons
+  const f = freshId && takes.find(t => t.id === freshId && !t.deleted);
+  $("fresh").hidden = !f;
+  if (f) { $("freshName").textContent = f.name; $("freshLen").textContent = fmt(f.dur); }
+  // Recently deleted
+  const B = binned();
+  $("binBtn").hidden = !B.length;
+  $("binBtn").textContent = binOpen ? "Hide recently deleted" : "Recently deleted (" + B.length + ")";
+  $("bin").hidden = !binOpen || !B.length;
+  const br = $("binRows"); br.textContent = "";
+  for (const t of B) {
+    const r = document.createElement("div"); r.className = "row";
+    const m = document.createElement("div"); m.className = "play"; m.innerHTML = '<span class="meta"><span class="t"></span><span class="s"></span></span>';
+    m.querySelector(".t").textContent = t.name; m.querySelector(".s").textContent = fmt(t.dur);
+    r.append(m, btn("small", "Restore", null, () => restoreTake(t)), btn("small", "Delete", "Delete for good", () => purgeTake(t)));
+    br.append(r);
+  }
+  showFine();
+  paint();
+  drawAll();
+  fillPeaks();
+}
+const freshTake = () => takes.find(t => t.id === freshId);
+$("binBtn").onclick = () => { binOpen = !binOpen; render(); };
+$("fPlay").onclick = () => { const t = freshTake(); t && playTake(t); };
+$("fMail").onclick = () => { const t = freshTake(); t && emailTake(t); };
+$("fDel").onclick = () => { const t = freshTake(); t && delTake(t); };
+$("fSave").hidden = !isDesktop;
+$("fSave").onclick = () => { const t = freshTake(); t && downloadTake(t); };
+
+/* ---------- install ----------
+   Android Chrome offers its own install prompt, which a web page may only open from a tap, so a card with an
+   Install button shows until the app is installed. iPhones have no prompt: the card says how to add it instead.
+   "Not now" hides the card for a week.
+   Once installed the card never shows again, in the app or in the browser: Chrome only offers its prompt when the
+   app isn't installed, and the app notes that it's installed (the browser and the app share this storage). */
+const INST_KEY = "sr-beta-inst-later", HAVE_KEY = "sr-beta-installed";
+let installEvt = null;
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const markInstalled = () => { try { localStorage.setItem(HAVE_KEY, "1"); } catch (e) {} };
+const isInstalled = () => { try { return !!localStorage.getItem(HAVE_KEY); } catch (e) { return false; } };
+if (standalone()) markInstalled();
+function installUI() {
+  let later = 0; try { later = +localStorage.getItem(INST_KEY) || 0; } catch (e) {}
+  // Android: only when Chrome offers to install (it doesn't once installed). iPhone: until it's opened from the home screen.
+  const show = !standalone() && Date.now() - later > 7 * 864e5 && (installEvt || (isIos && !isInstalled()));
+  $("inst").hidden = !show;
+  $("instAndroid").hidden = !installEvt;
+  $("instIos").hidden = !!installEvt || !isIos;
+}
+function later() { try { localStorage.setItem(INST_KEY, String(Date.now())); } catch (e) {} installUI(); }
+$("instLater").onclick = $("instLater2").onclick = later;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; installUI(); });
+window.addEventListener("appinstalled", () => { installEvt = null; markInstalled(); installUI(); tell("Installed. You'll find Recorder on your home screen."); checkStorage(); });
+$("instBtn").onclick = async () => {
+  if (!installEvt) return;
+  const e = installEvt; installEvt = null; e.prompt();
+  try { await e.userChoice; } catch (err) {}
+  installUI();
+};
+
+/* ---------- updates (same as Daily meds) ----------
+   The installed app has no pull-to-refresh, so it checks for a new version when it opens and whenever it comes
+   back to the front, and shows a button when one is ready. Recordings are kept either way.
+   Bump CACHE in sw.js whenever you change this file. */
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+const hadSW = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+function updBanner() {
+  if ($("updB")) return;
+  const b = document.createElement("button");
+  b.id = "updB"; b.className = "updb"; b.type = "button"; b.textContent = "New version ready · tap to update";
+  b.onclick = () => { if (session) return tell("Stop recording first, then tap update."); location.reload(); };
+  document.querySelector("main.wrap").prepend(b);   // above the title, in the page itself, so it never covers a button
+  scrollTo(0, 0);
+}
+let updLast = 0;
+async function checkUpdate() {
+  if (!navigator.serviceWorker || location.protocol !== "https:") return;
+  if (Date.now() - updLast < 3600000) return;
+  updLast = Date.now();
+  try { const r = await navigator.serviceWorker.getRegistration(); if (r) await r.update(); } catch (e) {}
+}
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadSW) updBanner(); });
+setTimeout(checkUpdate, 3000);
+
+/* ---------- start ---------- */
+installUI();
+showSource();
+/* Welcome: shown once, the first time the app is opened */
+{
+  const WKEY = "sr-beta-welcomed", w = $("welcome");
+  let seen = false; try { seen = !!localStorage.getItem(WKEY); } catch (e) {}
+  if (!seen) w.showModal();
+  w.addEventListener("close", () => { try { localStorage.setItem(WKEY, "1"); } catch (e) {} });
+  $("welOk").onclick = () => w.close();
+}
+load().then(n => {
+  render(); checkStorage();
+  if (n) tell(n === 1 ? "A recording that was cut off (the app closed while recording) has been rescued. It's at the top of your list."
+    : n + " recordings that were cut off have been rescued. They're in your list.", "Recording rescued");
+}).catch(() => { render(); tell("Recordings couldn't be loaded on this browser."); });
+</script>
+</body>
+</html>
