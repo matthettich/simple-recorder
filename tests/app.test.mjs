@@ -562,6 +562,62 @@ await test("storage reconnects after the browser closes the database", async () 
   assert(r.reopened && r.n >= 0, JSON.stringify(r));
 });
 
+
+await test("deleting the same recording twice is one delete and one undo", async () => {
+  await record(1200);
+  const r = await page.evaluate(async () => {
+    const t = live()[0]; undoList = [];
+    await Promise.all([delTake(t), delTake(t)]); await delTake(t);
+    return { n: undoList.length, msg: $("undoMsg").textContent };
+  });
+  assert(r.n === 1 && r.msg === "Recording deleted.", JSON.stringify(r));
+  await page.click("#undoBtn");
+});
+
+await test("a take stopped by the screen going off says so, once", async () => {
+  await page.waitForTimeout(450);
+  await page.click("#recBtn");
+  await page.waitForFunction(() => document.body.classList.contains("recording"));
+  await page.waitForTimeout(1200);   // STOP-after-REC guard
+  const hide = v => page.evaluate(v => { Object.defineProperty(document, "hidden", { get: () => v, configurable: true }); document.dispatchEvent(new Event("visibilitychange")); }, v);
+  await hide(true);
+  await page.waitForFunction(() => !session && !document.body.classList.contains("recording"));
+  assert(!(await page.isVisible("#askDlg")), "nothing said while the screen is off");
+  await hide(false);
+  await page.waitForSelector("#askDlg[open]");
+  assert(/Recording stopped because the screen turned off/.test(await page.textContent("#askMsg")), "notice text");
+  await page.click("#askYes");
+  await hide(false);
+  await page.waitForTimeout(300);
+  await noDialog();
+  await page.evaluate(() => { delete document.hidden; });
+});
+
+await test("a busy microphone gets a plain message and REC still works", async () => {
+  await page.waitForTimeout(450);
+  await page.evaluate(() => { navigator.mediaDevices.getUserMedia = async () => { throw new DOMException("busy", "NotReadableError"); }; });
+  await page.click("#recBtn");
+  await page.waitForSelector("#askDlg[open]");
+  assert(/microphone is busy/.test(await page.textContent("#askMsg")), await page.textContent("#askMsg"));
+  await page.click("#askYes");
+  await page.evaluate(() => { delete navigator.mediaDevices.getUserMedia; });
+  assert(!(await page.$eval("#recBtn", b => b.disabled)), "REC usable");
+});
+
+await test("an error while saving still leaves REC usable and says what to do", async () => {
+  await page.waitForTimeout(450);
+  await page.evaluate(() => { window.__save = saveRecording; window.saveRecording = async () => { throw new Error("boom"); }; });
+  await page.click("#recBtn");
+  await page.waitForFunction(() => document.body.classList.contains("recording"));
+  await page.waitForTimeout(1200);
+  await page.click("#recBtn");
+  await page.waitForSelector("#askDlg[open]");
+  assert(/Something went wrong saving/.test(await page.textContent("#askMsg")), "message");
+  await page.click("#askYes");
+  await page.evaluate(() => { window.saveRecording = window.__save; });
+  assert(!(await page.$eval("#recBtn", b => b.disabled)) && !(await page.evaluate(() => !!session)), "REC usable, no session left");
+});
+
 await test("no page errors", async () => { assert(!errors.length, errors.join("; ")); });
 
 await page.screenshot({ path: process.env.SHOT || path.join(ROOT, "tests", "shot.png"), fullPage: false });

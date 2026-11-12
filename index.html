@@ -157,18 +157,18 @@ dialog p{margin:0 0 14px;white-space:pre-line}
 dialog input[type=text]{width:100%;border:2px solid var(--mx);padding:12px;font-size:20px;margin-bottom:14px;background:var(--mxbg)}
 dialog .btns{justify-content:flex-end}
 
-.updb{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));z-index:50;
-  font-size:17px;font-weight:600;white-space:nowrap;padding:16px 22px;background:var(--orange);color:var(--mx);border:2px solid var(--mx);box-shadow:6px 6px 0 var(--mx)}
+.updb{display:block;width:calc(100% - 6px);margin:0 0 18px;
+  font-size:17px;font-weight:600;text-align:center;padding:16px 22px;background:var(--orange);color:var(--mx);border:2px solid var(--mx);box-shadow:6px 6px 0 var(--mx)}
 .fine{font-size:15px;color:var(--mx2);margin:22px 2px 0}
 .sending{opacity:.6;pointer-events:none}
 /* Header + settings */
 /* Title on the left, the gear on the right */
 header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 16px}
-header.top h1.brand{margin:0;white-space:nowrap;min-width:0}
+header.top h1.brand{margin:0;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis;display:block;font-size:clamp(20px,7vw,26px)}
 .setbtn{display:grid;place-items:center;width:48px;height:48px;border:2px solid var(--mx);background:var(--mxpanel);padding:0}
 .setbtn svg{width:28px;height:28px}
 .setbtn:active{background:var(--mx);color:var(--mxon)}
-.src{border:1px solid var(--mxdim);background:transparent;color:var(--mx2);font-family:var(--mono);font-size:13px;padding:6px 10px;text-align:center;max-width:100%;
+.src{border:1px solid var(--mxdim);background:transparent;color:var(--mx2);font-family:var(--mono);font-size:13px;padding:6px 10px;text-align:center;max-width:100%;min-height:44px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .recording .src{pointer-events:none}
 dialog .sec{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--mx2);margin:4px 0 8px}
@@ -319,6 +319,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fmt = s => { s = Math.max(0, Math.round(s || 0)); const m = Math.floor(s / 60); return m + ":" + String(s % 60).padStart(2, "0"); };
 const when = ts => { const d = new Date(ts);
   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) + " · " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); };
+// The name a new take gets: its date and time, and (2), (3)… if a recording from the same minute is already in the list
+function takeName(ts) {
+  const base = when(ts), used = new Set(takes.filter(t => !t.deleted).map(t => t.name));
+  let n = base; for (let i = 2; used.has(n); i++) n = base + " (" + i + ")";
+  return n;
+}
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const extOf = type => /wav/.test(type) ? "wav" : /mp4|m4a|aac/.test(type) ? "m4a" : /ogg/.test(type) ? "ogg" : "webm";
 
@@ -494,10 +500,11 @@ try { localStorage.removeItem("simple-recorder-share-wav"); } catch (e) {}   // 
 
 /* ---------- microphones ---------- */
 // A USB mic or interface, by its name. Bluetooth earbuds and headsets never count: they record at phone-call quality.
+const BT_NAME = /bluetooth|\bbt\b|hands-?free|airpods|buds/i;
 const USB_BRANDS = /external|interface|audio device|rode|shure|yeti|zoom|tascam|focusrite|scarlett|irig|behringer|presonus|audio-technica|at2020/i;
 function isUsbMic(d) {
   const l = d.label || "";
-  if (!l || d.deviceId === "default" || d.deviceId === "communications" || /bluetooth|\bbt\b|hands-?free|airpods|buds/i.test(l)) return false;
+  if (!l || d.deviceId === "default" || d.deviceId === "communications" || BT_NAME.test(l)) return false;
   return /usb/i.test(l) || (USB_BRANDS.test(l) && !/headset|earpiece|speaker/i.test(l));
 }
 async function inputs() {
@@ -522,6 +529,12 @@ async function openMic() {
     const again = await chosenInput(), tr = s.getAudioTracks()[0], now = tr && tr.getSettings ? tr.getSettings().deviceId : "";
     if (again && again !== now) {
       try { const s2 = await md.getUserMedia({ audio: { ...base, deviceId: { exact: again } } }); s.getTracks().forEach(t => t.stop()); s = s2; } catch (e) {}
+    }
+    // Bluetooth earbuds as the default mic record at phone-call quality: use the phone's own mic instead, if it can be found
+    const bt = s.getAudioTracks()[0];
+    if (bt && BT_NAME.test(bt.label || "")) {
+      const own = (await inputs()).find(d => d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications" && !BT_NAME.test(d.label || ""));
+      if (own) { try { const s2 = await md.getUserMedia({ audio: { ...base, deviceId: { exact: own.deviceId } } }); s.getTracks().forEach(t => t.stop()); s = s2; } catch (e) {} }
     }
   }
   return s;
@@ -580,7 +593,7 @@ class Recording {
     // Made during the tap itself: phones keep audio made later, after the mic question, switched off
     try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); this.ctx.resume(); } catch (e) { this.ctx = null; }
     if (!navigator.mediaDevices || (!this.wav && !window.MediaRecorder) || (this.wav && !(this.ctx && this.ctx.audioWorklet))) throw new Error("nosupport");
-    try { this.stream = await openMic(); } catch (e) { throw new Error("nomic"); }
+    try { this.stream = await openMic(); } catch (e) { const err = new Error("nomic"); err.mic = e && e.name; throw err; }
     const tr = this.stream.getAudioTracks()[0];
     this.inputName = (tr && tr.label) || "";
     // The mic went away (unplugged, a phone call took it…): finish and keep what's there
@@ -644,7 +657,14 @@ class Recording {
     this.saves = this.saves.then(() => this.persist && addPart(this.id, seq, b)).catch(() => { this.persist = false; });
   }
   async keepAwake() {   // keep the screen on while recording
-    try { const w = await navigator.wakeLock.request("screen"); if (this.state === "recording") this.wake = w; else w.release(); } catch (e) {}
+    try {
+      const w = await navigator.wakeLock.request("screen");
+      if (this.state !== "recording") return w.release();
+      try { this.wake && this.wake.release(); } catch (e) {}
+      this.wake = w;
+    } catch (e) {   // no screen lock on this phone, or it said no: say so quietly, never with a pop-up
+      if (this.state === "recording" && !this.clipped) $("say").innerHTML = '<span class="dot"></span>Recording… keep the screen on while you record';
+    }
   }
   meter() {
     try {
@@ -673,19 +693,27 @@ class Recording {
   async stop() {
     if (this.state !== "recording") return;
     this.state = "stopping";
-    this.dur = (Date.now() - this.t0) / 1000;
-    stoppingUI();
-    if (this.mr) { try { if (this.mr.state !== "inactive") this.mr.stop(); } catch (e) {} }
-    else if (this.flush) this.flush();
-    await Promise.race([this.stopped, sleep(4000)]);
-    if (this.wav && !this.ch) this.decide(this.hold.filter(c => loudest(c) > 1e-4));
-    this.cleanup();
-    await this.saves;
-    this.state = "saving";
-    await saveRecording(this);
-    this.state = "done";
-    if (session === this) session = null;
-    idleUI();
+    try {
+      this.dur = (Date.now() - this.t0) / 1000;
+      stoppingUI();
+      if (this.mr) { try { if (this.mr.state !== "inactive") this.mr.stop(); } catch (e) {} }
+      else if (this.flush) this.flush();
+      await Promise.race([this.stopped, sleep(4000)]);
+      if (this.wav && !this.ch) this.decide(this.hold.filter(c => loudest(c) > 1e-4));
+      this.cleanup();
+      await this.saves;
+      this.state = "saving";
+      await saveRecording(this);
+    } catch (e) {
+      // The sound saved so far stays on the phone and is put back together the next time the app opens (see recover)
+      try { this.cleanup(); } catch (err) {}
+      tell(this.persist ? "Something went wrong saving that recording. Close the app and open it again: it will be brought back." : "Something went wrong and that recording couldn't be saved. Sorry about that. Try again.");
+    } finally {
+      this.state = "done";
+      if (session === this) session = null;
+      idleUI();
+      leftNote();
+    }
   }
   cleanup() {
     cancelAnimationFrame(this.raf);
@@ -701,7 +729,7 @@ async function saveRecording(s) {
   const body = s.parts; s.parts = [];
   if (!s.bytes) { try { await dropPending(s.id); } catch (e) {} return tell("Nothing was recorded. Try again."); }
   const blob = new Blob(s.wav ? [wavHeader(s.bytes, s.sr, s.ch, s.bits), ...body] : body, { type: s.type });
-  const meta = { id: s.id, created: s.created, name: when(s.created), dur: s.dur, type: s.type, deleted: 0, sent: 0 };
+  const meta = { id: s.id, created: s.created, name: takeName(s.created), dur: s.dur, type: s.type, deleted: 0, sent: 0 };
   try { await addTake(meta, blob); }
   catch (e) {
     // The phone wouldn't keep it (usually out of space): don't lose the take, put it in Downloads instead
@@ -725,11 +753,20 @@ async function startRec() {
     if (session === s) session = null;
     idleUI();
     if (e.message === "nosupport") return tell("This browser can't record. Open the app in Chrome (Android) or Safari (iPhone).");
+    if (e.message === "nomic" && /^(NotReadable|Abort)/.test(e.mic)) return tell("The microphone is busy. Another app or a phone call may be using it. Close that and try again.", "Microphone");
+    if (e.message === "nomic" && /^(NotFound|Overconstrained)/.test(e.mic)) return tell("No microphone was found. If you use a plug-in mic, unplug it and plug it back in.", "Microphone");
     if (e.message === "nomic") return tell("The app needs the microphone to record.\n\nWhen your phone asks, tap Allow. If you said no before, open the browser's site settings for this page and allow the microphone.", "Microphone");
     return tell("Recording couldn't start in this format. Try M4A in Settings.");
   }
 }
 const recording = () => !!(session && session.state === "recording");
+// A take that ended because the screen went off or he left the app: said once, when it's saved and the app is back in front
+let hiddenStop = false;
+function leftNote() {
+  if (!hiddenStop || session || document.hidden) return;
+  hiddenStop = false;
+  tell("Recording stopped because the screen turned off or you left the app. What you played up to then is saved.");
+}
 
 /* What the recorder panel shows */
 let tick = 0;
@@ -771,8 +808,8 @@ $("recBtn").onclick = () => {
 };
 document.addEventListener("visibilitychange", () => {
   // If the app goes to the background mid-take, finish and save it rather than lose it
-  if (document.hidden) { if (recording()) session.stop(); }
-  else checkUpdate();
+  if (document.hidden) { if (recording()) { hiddenStop = true; session.stop(); } }
+  else { if (recording()) session.keepAwake(); leftNote(); checkUpdate(); }   // screen locks let go when the page hides: take it again
 });
 
 /* ---------- reading a take back: its waveform, and a WAV copy ---------- */
@@ -914,14 +951,19 @@ $("undoBtn").onclick = async () => {
   for (const { t, wasFresh } of L) { try { if ((await setDeleted(t, 0)) && wasFresh) freshId = t.id; } catch (e) {} }
   render();
 };
+const deleting = new Set();   // takes being deleted right now: a second tap on the same one does nothing
 async function delTake(t) {
-  const wasFresh = freshId === t.id;
-  try { if (!(await setDeleted(t, Date.now()))) return; }
-  catch (e) { return tell("That recording couldn't be deleted. Try again."); }
-  if (cur && cur.id === t.id) stopPlay();
-  if (wasFresh) freshId = null;
-  undoList.push({ t, wasFresh });
-  render(); showUndo();
+  if (t.deleted || deleting.has(t.id)) return;
+  deleting.add(t.id);
+  try {
+    const wasFresh = freshId === t.id;
+    try { if (!(await setDeleted(t, Date.now()))) return; }
+    catch (e) { return tell("That recording couldn't be deleted. Try again."); }
+    if (cur && cur.id === t.id) stopPlay();
+    if (wasFresh) freshId = null;
+    undoList.push({ t, wasFresh });
+    render(); showUndo();
+  } finally { deleting.delete(t.id); }
 }
 async function restoreTake(t) {
   try { await setDeleted(t, 0); } catch (e) { return tell("That recording couldn't be restored. Try again."); }
@@ -1189,7 +1231,8 @@ function updBanner() {
   const b = document.createElement("button");
   b.id = "updB"; b.className = "updb"; b.type = "button"; b.textContent = "New version ready · tap to update";
   b.onclick = () => { if (session) return tell("Stop recording first, then tap update."); location.reload(); };
-  document.body.append(b);
+  document.querySelector("main.wrap").prepend(b);   // above the title, in the page itself, so it never covers a button
+  scrollTo(0, 0);
 }
 let updLast = 0;
 async function checkUpdate() {
